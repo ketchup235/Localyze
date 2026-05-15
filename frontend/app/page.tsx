@@ -13,7 +13,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   fetchBusinesses,
@@ -255,36 +254,26 @@ export default function HomePage() {
 
   return (
     <div id="top" className="min-h-screen bg-background text-foreground">
-      <a
-        href="#top"
-        className="fixed left-0 top-0 z-[10000] border-b border-r border-white/50 bg-[#0d130e] p-2 text-[26px] text-foreground max-[1199px]:text-[20px] max-[511px]:text-[16px]"
-        aria-label="Back to top"
-      >
-        <span className="block w-[4em]">Localyze</span>
-      </a>
       <header className="relative h-[100vh] overflow-hidden hero-gradient">
         <GlobeHero focus={locationFocus} />
-        <div className="relative z-10 flex h-full flex-col px-6 pt-10 lg:px-16 pointer-events-none">
-          <div className="flex items-center justify-between">
-            <p className="text-lg font-semibold tracking-wide">Localyze</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="pointer-events-auto"
-              onClick={() => setChatOpen(true)}
-            >
+        <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center pointer-events-none">
+          <div className="absolute right-6 top-6 pointer-events-auto">
+            <Button variant="ghost" size="sm" onClick={() => setChatOpen(true)}>
               <MessageCircle className="h-4 w-4" />
               Help
             </Button>
           </div>
-          <div className="mt-16 max-w-xl space-y-6">
-            <p className="text-xs uppercase tracking-[0.35em] text-emerald-300">
+          <div className="max-w-3xl space-y-6">
+            <p className="text-sm uppercase tracking-[0.5em] text-emerald-300 sm:text-base">
               Explore your local map by zip code
             </p>
-            <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">
-              Find the businesses near you.
+            <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl lg:text-7xl">
+              Localyze
             </h1>
-            <p className="text-sm text-slate-300 sm:text-base">
+            <p className="text-xl text-slate-200 sm:text-2xl">
+              Find the businesses near you.
+            </p>
+            <p className="text-base text-slate-300 sm:text-lg">
               Enter a zip code to focus the Earth on that area and surface local companies with a clean,
               professional experience.
             </p>
@@ -513,19 +502,28 @@ export default function HomePage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={chatOpen} onOpenChange={setChatOpen}>
-        <DialogTrigger asChild>
-          <button className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-400 text-slate-950 shadow-lg">
-            <MessageCircle className="h-5 w-5" />
-          </button>
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Localyze Assistant</DialogTitle>
-            <DialogDescription>Intelligent help, powered by your data.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="max-h-64 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-3">
+      <div
+        className={`fixed right-6 top-20 z-[10050] w-[min(420px,90vw)] transition duration-300 ${
+          chatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"
+        }`}
+      >
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 shadow-2xl backdrop-blur">
+          <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Localyze Assistant</p>
+              <p className="text-xs text-slate-400">Intelligent help, powered by your data.</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setChatOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
+          <div className="space-y-4 p-4">
+            <div className="max-h-72 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-3">
               {chatMessages.map((message, index) => (
                 <div
                   key={index}
@@ -548,8 +546,8 @@ export default function HomePage() {
               <Button onClick={handleSendChat}>Send</Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
 
       <div className="relative z-[10002] h-0 font-[Arial]">
         <div className="absolute bottom-2 right-2">

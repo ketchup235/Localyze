@@ -19,8 +19,6 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
     let scene: any
     let camera: any
     let earthGroup: any
-    let cloudMesh: any
-    let atmosphereMesh: any
     let starField: any
     let frameId = 0
 
@@ -55,26 +53,26 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
       })
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
       renderer.setSize(container.clientWidth, container.clientHeight, false)
-      renderer.outputEncoding = THREE.sRGBEncoding
+      renderer.outputColorSpace = THREE.SRGBColorSpace
       renderer.toneMapping = THREE.ACESFilmicToneMapping
-      renderer.toneMappingExposure = 1.05
+      renderer.toneMappingExposure = 0.95
       renderer.physicallyCorrectLights = true
       renderer.setClearColor(0x000000, 0)
 
-      scene.add(new THREE.AmbientLight(0x5f6f8a, 0.25))
+      scene.add(new THREE.AmbientLight(0x5f6f8a, 0.32))
 
-      const hemi = new THREE.HemisphereLight(0x9ec7ff, 0x08111f, 0.45)
+      const hemi = new THREE.HemisphereLight(0x9ec7ff, 0x08111f, 0.55)
       scene.add(hemi)
 
-      const keyLight = new THREE.DirectionalLight(0xffffff, 2.1)
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.3)
       keyLight.position.set(7, 4, 10)
       scene.add(keyLight)
 
-      const rimLight = new THREE.DirectionalLight(0x2da8ff, 0.8)
+      const rimLight = new THREE.DirectionalLight(0x2da8ff, 0.5)
       rimLight.position.set(-9, 3, -7)
       scene.add(rimLight)
 
-      const fill = new THREE.PointLight(0x66ddff, 14, 26)
+      const fill = new THREE.PointLight(0x66ddff, 8, 26)
       fill.position.set(-3, 1.5, 5)
       scene.add(fill)
 
@@ -107,78 +105,32 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
       scene.add(earthGroup)
 
       const loader = new THREE.TextureLoader()
-      loader.crossOrigin = "anonymous"
-      const earthMap = loader.load("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg")
-      const normalMap = loader.load("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_normal_2048.jpg")
-      const specularMap = loader.load("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_specular_2048.jpg")
-      const nightMap = loader.load("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_lights_2048.png")
-      const cloudsMap = loader.load("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_clouds_1024.png")
+      const textureBase = "/textures/earth"
+      const earthMap = loader.load(`${textureBase}/earth_atmos_2048.jpg`)
+      const normalMap = loader.load(`${textureBase}/earth_normal_2048.jpg`)
+      const nightMap = loader.load(`${textureBase}/earth_lights_2048.png`)
 
-      earthMap.encoding = THREE.sRGBEncoding
-      nightMap.encoding = THREE.sRGBEncoding
-      cloudsMap.encoding = THREE.sRGBEncoding
+      earthMap.colorSpace = THREE.SRGBColorSpace
+      nightMap.colorSpace = THREE.SRGBColorSpace
+      
 
       earthMap.anisotropy = renderer.capabilities.getMaxAnisotropy()
       normalMap.anisotropy = renderer.capabilities.getMaxAnisotropy()
-      specularMap.anisotropy = renderer.capabilities.getMaxAnisotropy()
 
-      const earthMaterial = new THREE.MeshPhongMaterial({
+      const earthMaterial = new THREE.MeshStandardMaterial({
         map: earthMap,
         normalMap,
-        normalScale: new THREE.Vector2(0.42, 0.42),
-        specularMap,
-        specular: new THREE.Color(0x1b2b3f),
-        shininess: 22,
-        emissive: new THREE.Color(0x24405a),
+        normalScale: new THREE.Vector2(0.4, 0.4),
+        roughness: 0.85,
+        metalness: 0.0,
+        emissive: new THREE.Color(0x141f30),
         emissiveMap: nightMap,
-        emissiveIntensity: 0.45,
+        emissiveIntensity: 0.2,
       })
 
       const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(2.15, 96, 96), earthMaterial)
       earthGroup.add(earthMesh)
 
-      cloudMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(2.2, 96, 96),
-        new THREE.MeshPhongMaterial({
-          map: cloudsMap,
-          transparent: true,
-          opacity: 0.45,
-          depthWrite: false,
-        }),
-      )
-      earthGroup.add(cloudMesh)
-
-      atmosphereMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(2.32, 64, 64),
-        new THREE.ShaderMaterial({
-          uniforms: {
-            glowColor: { value: new THREE.Color(0x2da8ff) },
-            viewVector: { value: camera.position.clone() },
-          },
-          vertexShader: `
-            uniform vec3 viewVector;
-            varying float intensity;
-            void main() {
-              vec3 vNormal = normalize(normalMatrix * normal);
-              vec3 vNormel = normalize(normalMatrix * viewVector);
-              intensity = pow(0.72 - dot(vNormal, vNormel), 4.2);
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-          `,
-          fragmentShader: `
-            uniform vec3 glowColor;
-            varying float intensity;
-            void main() {
-              gl_FragColor = vec4(glowColor, intensity * 0.75);
-            }
-          `,
-          side: THREE.BackSide,
-          blending: THREE.AdditiveBlending,
-          transparent: true,
-          depthWrite: false,
-        }),
-      )
-      earthGroup.add(atmosphereMesh)
 
       focusRef.current = (lat: number, lon: number) => {
         targetRotationY = (-lon * Math.PI) / 180 + 0.1
@@ -257,8 +209,8 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
         if (!earthGroup) return
 
         const isFocused = mode !== "idle"
-        const spinAmount = isFocused ? 0.0011 : 0.004
-        earthGroup.rotation.y -= spinAmount
+        const spinAmount = isFocused ? 0.00075 : 0.0018
+        targetRotationY -= spinAmount
         if (!dragState.isDragging) {
           dragState.velocityX *= 0.94
           dragState.velocityY *= 0.94
@@ -269,12 +221,6 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
         earthGroup.rotation.y += (targetRotationY - earthGroup.rotation.y) * 0.02
         earthGroup.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.05)
 
-        if (cloudMesh) {
-          cloudMesh.rotation.y -= isFocused ? 0.001 : 0.0032
-        }
-        if (atmosphereMesh?.material?.uniforms) {
-          atmosphereMesh.material.uniforms.viewVector.value.copy(camera.position)
-        }
         if (starField) {
           starField.rotation.y += 0.0004
         }
@@ -323,7 +269,6 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
 
   return (
     <div ref={containerRef} className="absolute inset-0">
-      <div id="glow" className="absolute inset-0" />
       <canvas ref={canvasRef} className="h-full w-full touch-none" />
     </div>
   )
