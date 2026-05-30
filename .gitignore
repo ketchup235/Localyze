@@ -13,3 +13,9 @@ env/
 
 # Environment variables (for later use)
 .env
+
+# Node.js
+node_modules/
+
+# Next.js build output
+.next/

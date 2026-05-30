@@ -1,1 +1,0 @@
-self.__REACT_LOADABLE_MANIFEST="{\"components/globe/GlobeHero.tsx -> three\":{\"id\":\"components/globe/GlobeHero.tsx -> three\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_three_build_three_module_js.js\"]}}"
