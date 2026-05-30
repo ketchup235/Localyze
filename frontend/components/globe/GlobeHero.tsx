@@ -5,12 +5,28 @@ import type { LocationPayload } from "@/lib/types"
 
 type GlobeHeroProps = {
   focus?: LocationPayload | null
+  spinMultiplier?: number
+  scrollSpinProgress?: number
 }
 
-export function GlobeHero({ focus }: GlobeHeroProps) {
+export function GlobeHero({
+  focus,
+  spinMultiplier = 1,
+  scrollSpinProgress = 0,
+}: GlobeHeroProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const focusRef = useRef<((lat: number, lon: number) => void) | null>(null)
+  const spinMultiplierRef = useRef(spinMultiplier)
+  const scrollSpinProgressRef = useRef(scrollSpinProgress)
+
+  useEffect(() => {
+    spinMultiplierRef.current = spinMultiplier
+  }, [spinMultiplier])
+
+  useEffect(() => {
+    scrollSpinProgressRef.current = scrollSpinProgress
+  }, [scrollSpinProgress])
 
   useEffect(() => {
     focusRef.current = null
@@ -150,13 +166,22 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
         pointerId: 0,
       }
 
+      let lastWidth = 0
+      let lastHeight = 0
+
       const handleResize = () => {
         if (!renderer || !camera) return
         const bounds = container.getBoundingClientRect()
-        if (!bounds.width || !bounds.height) return
-        camera.aspect = bounds.width / bounds.height
+        const nextWidth = Math.round(bounds.width)
+        const nextHeight = Math.round(bounds.height)
+        if (!nextWidth || !nextHeight) return
+        if (nextWidth === lastWidth && nextHeight === lastHeight) return
+        lastWidth = nextWidth
+        lastHeight = nextHeight
+        camera.aspect = nextWidth / nextHeight
         camera.updateProjectionMatrix()
-        renderer.setSize(bounds.width, bounds.height, false)
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+        renderer.setSize(nextWidth, nextHeight, false)
       }
 
       const resizeObserver = new ResizeObserver(handleResize)
@@ -192,24 +217,23 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
         canvas.releasePointerCapture(event.pointerId)
       }
 
-      const handleWheel = (event: WheelEvent) => {
-        const delta = event.deltaY > 0 ? -0.05 : 0.05
-        targetScale = clamp(targetScale + delta, 0.95, 1.4)
-        mode = "idle"
-      }
-
       canvas.addEventListener("pointerdown", handlePointerDown)
       canvas.addEventListener("pointermove", handlePointerMove)
       canvas.addEventListener("pointerup", handlePointerUp)
       canvas.addEventListener("pointerleave", handlePointerUp)
-      canvas.addEventListener("wheel", handleWheel, { passive: true })
 
       const animate = () => {
         frameId = window.requestAnimationFrame(animate)
         if (!earthGroup) return
 
         const isFocused = mode !== "idle"
-        const spinAmount = isFocused ? 0.00075 : 0.0018
+        const scrollSpinProgressValue = Math.min(
+          1,
+          Math.max(0, scrollSpinProgressRef.current),
+        )
+        const scrollSpinRotation = scrollSpinProgressValue * Math.PI * 2
+        const baseSpinAmount = (isFocused ? 0.00075 : 0.0018) * spinMultiplierRef.current
+        const spinAmount = scrollSpinProgressValue > 0 ? 0 : baseSpinAmount
         targetRotationY -= spinAmount
         if (!dragState.isDragging) {
           dragState.velocityX *= 0.94
@@ -217,8 +241,10 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
           targetRotationY += dragState.velocityX
           targetRotationX = clamp(targetRotationX + dragState.velocityY, -1.15, 1.15)
         }
+        const combinedTargetY = targetRotationY - scrollSpinRotation
+        const rotationLerp = scrollSpinProgressValue > 0 ? 0.12 : 0.02
         earthGroup.rotation.x += (targetRotationX - earthGroup.rotation.x) * 0.03
-        earthGroup.rotation.y += (targetRotationY - earthGroup.rotation.y) * 0.02
+        earthGroup.rotation.y += (combinedTargetY - earthGroup.rotation.y) * rotationLerp
         earthGroup.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.05)
 
         if (starField) {
@@ -244,7 +270,6 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
         canvas.removeEventListener("pointermove", handlePointerMove)
         canvas.removeEventListener("pointerup", handlePointerUp)
         canvas.removeEventListener("pointerleave", handlePointerUp)
-        canvas.removeEventListener("wheel", handleWheel)
         resizeObserver.disconnect()
       }
     }
@@ -269,7 +294,7 @@ export function GlobeHero({ focus }: GlobeHeroProps) {
 
   return (
     <div ref={containerRef} className="absolute inset-0">
-      <canvas ref={canvasRef} className="h-full w-full touch-none" />
+      <canvas ref={canvasRef} className="h-full w-full touch-none block" />
     </div>
   )
 }

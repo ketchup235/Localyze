@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { GlobeHero } from "@/components/globe/GlobeHero"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -54,6 +54,9 @@ export default function HomePage() {
       text: "Hi! Ask me anything about Localyze: zip search, filters, saving, reviews, or coupons.",
     },
   ])
+  const [heroProgress, setHeroProgress] = useState(0)
+  const heroProgressRef = useRef(0)
+  const mainRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const savedRaw = window.localStorage.getItem("localyze_saved")
@@ -69,6 +72,35 @@ export default function HomePage() {
   useEffect(() => {
     window.localStorage.setItem("localyze_saved", JSON.stringify(saved))
   }, [saved])
+
+  useEffect(() => {
+    heroProgressRef.current = heroProgress
+  }, [heroProgress])
+
+  useEffect(() => {
+    const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+    const handleWheel = (event: WheelEvent) => {
+      const target = event.target as Node | null
+      if (
+        heroProgressRef.current >= 1 &&
+        mainRef.current &&
+        target &&
+        mainRef.current.contains(target)
+      ) {
+        return
+      }
+      event.preventDefault()
+      const delta = event.deltaY
+      setHeroProgress((prev) => clamp(prev + delta / 1000, 0, 1))
+    }
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    window.addEventListener("wheel", handleWheel, { passive: false })
+    return () => {
+      document.body.style.overflow = originalOverflow
+      window.removeEventListener("wheel", handleWheel)
+    }
+  }, [])
 
   const filteredBusinesses = useMemo(() => {
     const source = category === "saved" ? saved : businesses
@@ -252,66 +284,113 @@ export default function HomePage() {
     }
   }
 
+  const heroTextOpacity = Math.max(0, 1 - heroProgress * 2.8)
+  const heroTextTranslate = heroProgress * -36
+  const heroBaseOffset = 32
+  const heroEase = heroProgress * heroProgress * (3 - 2 * heroProgress)
+  const globeEase = Math.min(1, heroProgress / 0.9)
+  const globeEaseSmooth = globeEase * globeEase * (3 - 2 * globeEase)
+  const scrollSpinProgress = Math.min(1, Math.max(0, heroProgress))
+  const zipOpacity = Math.min(1, Math.max(0, (scrollSpinProgress - 0.98) / 0.02))
+  const zipTranslate = (1 - zipOpacity) * 14
+  const zipScale = 0.98 + zipOpacity * 0.02
+  const mainOpacity = Math.min(1, heroProgress * 1.15)
+  const mainTranslate = (1 - mainOpacity) * 26
+  const globeBaseSize = 100
+  const globeScale = 1 - globeEaseSmooth * 0.58
+  const globeTranslateY = (1 - globeEaseSmooth) * 36
+  const spinMultiplier = 0.55
+
   return (
-    <div id="top" className="min-h-screen bg-background text-foreground">
+    <div id="top" className="relative h-screen overflow-hidden bg-background text-foreground">
       <header className="relative h-[100vh] overflow-hidden hero-gradient">
-        <GlobeHero focus={locationFocus} />
-        <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center pointer-events-none">
-          <div className="absolute right-6 top-6 pointer-events-auto">
+        <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+          <div
+            className="relative"
+            style={{
+              width: `${globeBaseSize}vw`,
+              height: `${globeBaseSize}vw`,
+              transform: `translateY(${globeTranslateY}vh) scale(${globeScale})`,
+              transformOrigin: "center",
+              willChange: "transform",
+            }}
+          >
+            <GlobeHero
+              focus={locationFocus}
+              spinMultiplier={spinMultiplier}
+              scrollSpinProgress={scrollSpinProgress}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                opacity: zipOpacity,
+                transform: `translateY(${zipTranslate}px) scale(${zipScale})`,
+                pointerEvents: zipOpacity < 0.2 ? "none" : "auto",
+              }}
+            >
+              <div className="absolute left-1/2 top-1/2 w-full max-w-xs -translate-x-1/2 -translate-y-1/2">
+                <Input
+                  value={zipInput}
+                  onChange={(event) => setZipInput(event.target.value)}
+                  placeholder="Enter Zip Code"
+                  aria-label="Enter your 5-digit zip code"
+                  className="w-full text-center"
+                />
+              </div>
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 translate-y-12">
+                <Button onClick={handleSearch}>
+                  <Search className="h-4 w-4" />
+                  Search
+                </Button>
+              </div>
+              {zipError && (
+                <p className="absolute left-1/2 top-1/2 -translate-x-1/2 translate-y-20 text-center text-sm text-rose-400">
+                  {zipError}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="relative z-10 flex h-full flex-col items-center justify-start px-6 pt-8 text-center pointer-events-none">
+          <div className="absolute right-6 top-3 pointer-events-auto">
             <Button variant="ghost" size="sm" onClick={() => setChatOpen(true)}>
               <MessageCircle className="h-4 w-4" />
               Help
             </Button>
           </div>
-          <div className="max-w-3xl space-y-6">
-            <p className="text-sm uppercase tracking-[0.5em] text-emerald-300 sm:text-base">
-              Explore your local map by zip code
-            </p>
-            <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl lg:text-7xl">
-              Localyze
-            </h1>
-            <p className="text-xl text-slate-200 sm:text-2xl">
-              Find the businesses near you.
-            </p>
-            <p className="text-base text-slate-300 sm:text-lg">
-              Enter a zip code to focus the Earth on that area and surface local companies with a clean,
-              professional experience.
-            </p>
-            <Button
-              size="lg"
-              className="pointer-events-auto"
-              onClick={() => document.getElementById("explore")?.scrollIntoView({ behavior: "smooth" })}
+          <div className="relative w-full max-w-4xl">
+            <div
+              className="space-y-6"
+              style={{
+                opacity: heroTextOpacity,
+                transform: `translateY(${heroTextTranslate + heroBaseOffset}px)`,
+              }}
             >
-              Start Exploring
-            </Button>
+              <h1 className="text-6xl font-semibold tracking-tight text-emerald-400 sm:text-7xl lg:text-8xl">
+                Localyze
+              </h1>
+              <p className="text-2xl text-slate-200 sm:text-3xl">
+                Find the businesses near you.
+              </p>
+              <p className="text-lg text-slate-300 sm:text-xl">
+                Enter a zip code to explore local shops, restaurants, and services.
+              </p>
+            </div>
           </div>
         </div>
       </header>
 
-      <main id="explore" className="mx-auto max-w-6xl space-y-10 px-6 py-16">
-        <section className="space-y-6">
-          <div className="space-y-3 text-center">
-            <h2 className="text-3xl font-semibold">Find Local Businesses</h2>
-            <p className="text-sm text-slate-300">
-              Search any valid U.S. zip to zoom the globe and discover nearby businesses.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Input
-              value={zipInput}
-              onChange={(event) => setZipInput(event.target.value)}
-              placeholder="Enter Zip Code"
-              aria-label="Enter your 5-digit zip code"
-              className="w-full max-w-xs"
-            />
-            <Button onClick={handleSearch}>
-              <Search className="h-4 w-4" />
-              Search
-            </Button>
-          </div>
-          {zipError && <p className="text-center text-sm text-rose-400">{zipError}</p>}
-        </section>
-
+      <main
+        id="explore"
+        ref={mainRef}
+        className="mx-auto max-w-6xl space-y-10 px-6 py-16"
+        style={{
+          opacity: mainOpacity,
+          transform: `translateY(${mainTranslate}px)`,
+          pointerEvents: mainOpacity < 0.2 ? "none" : "auto",
+          overflowY: heroProgress >= 1 ? "auto" : "hidden",
+        }}
+      >
         <section className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap gap-2">
             {categoryOptions.map((item) => (
@@ -371,7 +450,9 @@ export default function HomePage() {
                       <CardDescription className="mt-1">{business.address}</CardDescription>
                     </div>
                     <Button variant="ghost" size="sm" onClick={() => toggleSaved(business)}>
-                      <Heart className={`h-4 w-4 ${isSaved ? "fill-emerald-400 text-emerald-400" : "text-white"}`} />
+                      <Heart
+                        className={`h-4 w-4 ${isSaved ? "fill-emerald-400 text-emerald-400" : "text-white"}`}
+                      />
                     </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -398,49 +479,50 @@ export default function HomePage() {
         </section>
       </main>
 
-      <Dialog open={!!selectedBusiness} onOpenChange={(open) => !open && setSelectedBusiness(null)}>
-        <DialogContent>
+      <Dialog
+        open={!!selectedBusiness}
+        onOpenChange={(open) => {
+          if (!open) setSelectedBusiness(null)
+        }}
+      >
+        <DialogContent className="max-w-3xl">
           {selectedBusiness && (
             <div className="space-y-6">
               <DialogHeader>
                 <DialogTitle>{selectedBusiness.name}</DialogTitle>
-                <DialogDescription>
-                  {selectedBusiness.address} • {selectedBusiness.category}
-                </DialogDescription>
+                <DialogDescription>{selectedBusiness.address}</DialogDescription>
               </DialogHeader>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-200">Community Reviews</h3>
+              <div className="flex flex-wrap gap-2">
+                <Badge>{selectedBusiness.category || "local"}</Badge>
+                <Badge className="bg-emerald-400/20 text-emerald-300">
+                  <Star className="mr-1 h-3 w-3" />
+                  {selectedBusiness.rating?.toFixed(1) || "4.0"}
+                </Badge>
+                <Badge className="bg-sky-400/20 text-sky-200">
+                  {selectedBusiness.review_count || 0} reviews
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-slate-200">Recent Reviews</h3>
+                {reviews.length === 0 ? (
+                  <p className="text-sm text-slate-400">
+                    No reviews yet. Be the first to share your experience.
+                  </p>
+                ) : (
                   <div className="space-y-3">
-                    {reviews.length === 0 && (
-                      <p className="text-sm text-slate-400">No reviews yet. Be the first.</p>
-                    )}
                     {reviews.map((review, index) => (
-                      <div key={index} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-sm font-semibold text-white">{review.user}</p>
-                        <p className="text-xs text-emerald-300">{review.rating} stars</p>
-                        <p className="text-sm text-slate-300">{review.text}</p>
-                      </div>
+                      <Card key={`${review.user}-${index}`} className="space-y-2">
+                        <CardTitle className="text-base">{review.user}</CardTitle>
+                        <CardDescription className="text-sm">
+                          {review.rating.toFixed(1)} / 5
+                        </CardDescription>
+                        <p className="text-sm text-slate-200">{review.text}</p>
+                      </Card>
                     ))}
                   </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-200">Coupons</h3>
-                  <div className="space-y-2">
-                    {selectedBusiness.deals && selectedBusiness.deals.length > 0 ? (
-                      selectedBusiness.deals.map((deal, index) => (
-                        <div key={index} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                          <p className="text-sm font-semibold text-white">{deal.discount}</p>
-                          <p className="text-xs text-slate-300">Code: {deal.code}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-400">No coupons yet.</p>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="grid gap-6 md:grid-cols-2">
@@ -449,22 +531,32 @@ export default function HomePage() {
                   <Input
                     placeholder="Your name"
                     value={reviewForm.name}
-                    onChange={(event) => setReviewForm({ ...reviewForm, name: event.target.value })}
-                  />
-                  <Input
-                    type="number"
-                    min={1}
-                    max={5}
-                    placeholder="Rating (1-5)"
-                    value={reviewForm.rating}
                     onChange={(event) =>
-                      setReviewForm({ ...reviewForm, rating: Number(event.target.value) || 5 })
+                      setReviewForm({ ...reviewForm, name: event.target.value })
                     }
                   />
+                  <select
+                    className="h-11 rounded-xl border border-white/15 bg-slate-950/60 px-4 text-sm text-foreground"
+                    value={reviewForm.rating}
+                    onChange={(event) =>
+                      setReviewForm({
+                        ...reviewForm,
+                        rating: Number(event.target.value),
+                      })
+                    }
+                  >
+                    {[5, 4, 3, 2, 1].map((value) => (
+                      <option key={value} value={value}>
+                        {value} stars
+                      </option>
+                    ))}
+                  </select>
                   <Textarea
                     placeholder="Share your experience"
                     value={reviewForm.text}
-                    onChange={(event) => setReviewForm({ ...reviewForm, text: event.target.value })}
+                    onChange={(event) =>
+                      setReviewForm({ ...reviewForm, text: event.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-3">
@@ -477,7 +569,9 @@ export default function HomePage() {
                   <Input
                     placeholder="Discount details"
                     value={couponForm.discount}
-                    onChange={(event) => setCouponForm({ ...couponForm, discount: event.target.value })}
+                    onChange={(event) =>
+                      setCouponForm({ ...couponForm, discount: event.target.value })
+                    }
                   />
                   <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
                     {captchaQuestion || "Loading captcha..."}
