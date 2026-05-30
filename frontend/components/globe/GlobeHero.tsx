@@ -38,8 +38,9 @@ export function GlobeHero({
     let starField: any
     let frameId = 0
 
+    const initialLongitude = 140
     let targetRotationX = -0.35
-    let targetRotationY = -0.7
+    let targetRotationY = (-initialLongitude * Math.PI) / 180 + 0.1
     let targetScale = 1
     let focusTimer = 0
     const focusDuration = 1.6
@@ -67,7 +68,7 @@ export function GlobeHero({
         alpha: true,
         powerPreference: "high-performance",
       })
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5))
       renderer.setSize(container.clientWidth, container.clientHeight, false)
       renderer.outputColorSpace = THREE.SRGBColorSpace
       renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -144,7 +145,7 @@ export function GlobeHero({
         emissiveIntensity: 0.2,
       })
 
-      const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(2.15, 96, 96), earthMaterial)
+      const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(2.15, 128, 128), earthMaterial)
       earthGroup.add(earthMesh)
 
 
@@ -180,7 +181,7 @@ export function GlobeHero({
         lastHeight = nextHeight
         camera.aspect = nextWidth / nextHeight
         camera.updateProjectionMatrix()
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5))
         renderer.setSize(nextWidth, nextHeight, false)
       }
 
@@ -233,7 +234,7 @@ export function GlobeHero({
         )
         const scrollSpinRotation = scrollSpinProgressValue * Math.PI * 2
         const baseSpinAmount = (isFocused ? 0.00075 : 0.0018) * spinMultiplierRef.current
-        const spinAmount = scrollSpinProgressValue > 0 ? 0 : baseSpinAmount
+        const spinAmount = baseSpinAmount * (scrollSpinProgressValue > 0 ? 0.25 : 1)
         targetRotationY -= spinAmount
         if (!dragState.isDragging) {
           dragState.velocityX *= 0.94

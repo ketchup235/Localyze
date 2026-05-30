@@ -286,7 +286,7 @@ export default function HomePage() {
 
   const heroTextOpacity = Math.max(0, 1 - heroProgress * 2.8)
   const heroTextTranslate = heroProgress * -36
-  const heroBaseOffset = 32
+  const heroBaseOffset = -10
   const heroEase = heroProgress * heroProgress * (3 - 2 * heroProgress)
   const globeEase = Math.min(1, heroProgress / 0.9)
   const globeEaseSmooth = globeEase * globeEase * (3 - 2 * globeEase)
@@ -296,9 +296,11 @@ export default function HomePage() {
   const zipScale = 0.98 + zipOpacity * 0.02
   const mainOpacity = Math.min(1, heroProgress * 1.15)
   const mainTranslate = (1 - mainOpacity) * 26
-  const globeBaseSize = 100
-  const globeScale = 1 - globeEaseSmooth * 0.58
-  const globeTranslateY = (1 - globeEaseSmooth) * 36
+  const globeBaseSize = 104
+  const globeScaleStart = 1.15
+  const globeScaleEnd = 0.56
+  const globeScale = globeScaleStart - globeEaseSmooth * (globeScaleStart - globeScaleEnd)
+  const globeTranslateY = (1 - globeEaseSmooth) * 73
   const spinMultiplier = 0.55
 
   return (
