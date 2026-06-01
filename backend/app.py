@@ -16,6 +16,15 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "localyze.db")
+NOMINATIM_HEADERS = {"User-Agent": "Localyze/1.0"}
+OVERPASS_HEADERS = {"User-Agent": "Localyze/1.0", "Accept-Language": "en-US,en;q=0.9"}
+OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.nchc.org.tw/api/interpreter",
+]
+NOMINATIM_TIMEOUT = 10
+OVERPASS_TIMEOUT = 20
 
 
 def init_db():
@@ -77,10 +86,11 @@ def resolve_zip_location(zip_code):
     """
     base_url = "https://nominatim.openstreetmap.org/search"
     params = {"q": zip_code, "format": "json", "limit": 1, "countrycodes": "us"}
-    headers = {"User-Agent": "FBLA_Localyze_Project/1.0"}
-
-    req = urllib.request.Request(f"{base_url}?{urllib.parse.urlencode(params)}", headers=headers)
-    with urllib.request.urlopen(req) as response:
+    req = urllib.request.Request(
+        f"{base_url}?{urllib.parse.urlencode(params)}",
+        headers=NOMINATIM_HEADERS,
+    )
+    with urllib.request.urlopen(req, timeout=NOMINATIM_TIMEOUT) as response:
         data = json.loads(response.read())
 
     if not data:
@@ -141,9 +151,8 @@ def fetch_local_data(location_query):
 
         lat, lon = location["lat"], location["lon"]
 
-        overpass_url = "https://overpass-api.de/api/interpreter"
         overpass_query = f"""
-        [out:json];
+        [out:json][timeout:25];
         (
           node["amenity"~"restaurant|cafe|bar|pub|ice_cream|fast_food"](around:5000, {lat}, {lon});
           node["amenity"~"hairdresser|beauty|tattoo|spa|gym"](around:5000, {lat}, {lon});
@@ -152,9 +161,23 @@ def fetch_local_data(location_query):
         out body 40;
         """
 
-        data_req = urllib.request.Request(overpass_url, data=overpass_query.encode("utf-8"))
-        with urllib.request.urlopen(data_req) as response:
-            osm_data = json.loads(response.read())
+        osm_data = None
+        last_error = None
+        for endpoint in OVERPASS_ENDPOINTS:
+            try:
+                data_req = urllib.request.Request(
+                    endpoint,
+                    data=overpass_query.encode("utf-8"),
+                    headers=OVERPASS_HEADERS,
+                )
+                with urllib.request.urlopen(data_req, timeout=OVERPASS_TIMEOUT) as response:
+                    osm_data = json.loads(response.read())
+                break
+            except Exception as exc:
+                last_error = exc
+                continue
+        if osm_data is None:
+            raise last_error or RuntimeError("Overpass request failed")
 
         for element in osm_data.get("elements", []):
             tags = element.get("tags", {})

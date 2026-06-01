@@ -3,6 +3,40 @@
 import { useEffect, useRef } from "react"
 import type { LocationPayload } from "@/lib/types"
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+const lerp = (start: number, end: number, t: number) => start + (end - start) * t
+
+const createCubicBezier = (p1x: number, p1y: number, p2x: number, p2y: number) => {
+  const cx = 3 * p1x
+  const bx = 3 * (p2x - p1x) - cx
+  const ax = 1 - cx - bx
+  const cy = 3 * p1y
+  const by = 3 * (p2y - p1y) - cy
+  const ay = 1 - cy - by
+
+  const sampleCurveX = (t: number) => ((ax * t + bx) * t + cx) * t
+  const sampleCurveY = (t: number) => ((ay * t + by) * t + cy) * t
+  const sampleCurveDerivativeX = (t: number) => (3 * ax * t + 2 * bx) * t + cx
+
+  const solveCurveX = (x: number) => {
+    let t2 = x
+    for (let i = 0; i < 4; i += 1) {
+      const x2 = sampleCurveX(t2) - x
+      const d2 = sampleCurveDerivativeX(t2)
+      if (Math.abs(d2) < 1e-6) return t2
+      t2 -= x2 / d2
+    }
+    return t2
+  }
+
+  return (x: number) => {
+    const clamped = clamp(x, 0, 1)
+    return sampleCurveY(solveCurveX(clamped))
+  }
+}
+
+const cinematicEase = createCubicBezier(0.65, 0, 0.35, 1)
+
 type GlobeHeroProps = {
   focus?: LocationPayload | null
   spinMultiplier?: number
@@ -42,8 +76,16 @@ export function GlobeHero({
     let targetRotationX = -0.35
     let targetRotationY = (-initialLongitude * Math.PI) / 180 + 0.1
     let targetScale = 1
-    let focusTimer = 0
-    const focusDuration = 1.6
+    const focusDurationMs = 600
+    let focusStartTime = 0
+    let focusFromRotationX = targetRotationX
+    let focusFromRotationY = targetRotationY
+    let focusFromScale = targetScale
+    let focusFromCamera: any = null
+    let focusToRotationX = targetRotationX
+    let focusToRotationY = targetRotationY
+    let focusToScale = 1.06
+    let focusToCamera: any = null
     let mode: "idle" | "focusing" | "focused" = "idle"
 
     const canvas = canvasRef.current
@@ -150,14 +192,19 @@ export function GlobeHero({
 
 
       focusRef.current = (lat: number, lon: number) => {
-        targetRotationY = (-lon * Math.PI) / 180 + 0.1
-        targetRotationX = -0.35 + ((lat * Math.PI) / 180) * 0.14
-        targetScale = 1.16
-        focusTimer = 0
+        focusFromRotationX = earthGroup.rotation.x
+        focusFromRotationY = earthGroup.rotation.y
+        focusFromScale = earthGroup.scale.x
+        focusFromCamera = camera.position.clone()
+
+        focusToRotationY = (-lon * Math.PI) / 180 + 0.1
+        focusToRotationX = -0.35 + ((lat * Math.PI) / 180) * 0.14
+        focusToScale = 1.06
+        focusToCamera = new THREE.Vector3(0, 1.0, 5.2)
+
+        focusStartTime = performance.now()
         mode = "focusing"
       }
-
-      const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
       const dragState = {
         isDragging: false,
         lastX: 0,
@@ -227,37 +274,50 @@ export function GlobeHero({
         frameId = window.requestAnimationFrame(animate)
         if (!earthGroup) return
 
+        const now = performance.now()
+        const isFocusing = mode === "focusing"
         const isFocused = mode !== "idle"
         const scrollSpinProgressValue = Math.min(
           1,
           Math.max(0, scrollSpinProgressRef.current),
         )
         const scrollSpinRotation = scrollSpinProgressValue * Math.PI * 2
-        const baseSpinAmount = (isFocused ? 0.00075 : 0.0018) * spinMultiplierRef.current
+        const baseSpinAmount = (isFocused ? 0.0003 : 0.0018) * spinMultiplierRef.current
         const spinAmount = baseSpinAmount * (scrollSpinProgressValue > 0 ? 0.25 : 1)
-        targetRotationY -= spinAmount
-        if (!dragState.isDragging) {
-          dragState.velocityX *= 0.94
-          dragState.velocityY *= 0.94
-          targetRotationY += dragState.velocityX
-          targetRotationX = clamp(targetRotationX + dragState.velocityY, -1.15, 1.15)
+        if (!isFocusing) {
+          targetRotationY -= spinAmount
+          if (!dragState.isDragging) {
+            dragState.velocityX *= 0.94
+            dragState.velocityY *= 0.94
+            targetRotationY += dragState.velocityX
+            targetRotationX = clamp(targetRotationX + dragState.velocityY, -1.15, 1.15)
+          }
         }
-        const combinedTargetY = targetRotationY - scrollSpinRotation
+
+        if (isFocusing && focusFromCamera && focusToCamera) {
+          const progress = Math.min(1, (now - focusStartTime) / focusDurationMs)
+          const eased = cinematicEase(progress)
+          targetRotationX = lerp(focusFromRotationX, focusToRotationX, eased)
+          targetRotationY = lerp(focusFromRotationY, focusToRotationY, eased)
+          targetScale = lerp(focusFromScale, focusToScale, eased)
+          camera.position.lerpVectors(focusFromCamera, focusToCamera, eased)
+          if (progress >= 1) mode = "focused"
+        }
+
+        const combinedTargetY = isFocusing ? targetRotationY : targetRotationY - scrollSpinRotation
         const rotationLerp = scrollSpinProgressValue > 0 ? 0.12 : 0.02
-        earthGroup.rotation.x += (targetRotationX - earthGroup.rotation.x) * 0.03
-        earthGroup.rotation.y += (combinedTargetY - earthGroup.rotation.y) * rotationLerp
-        earthGroup.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.05)
+        if (isFocusing) {
+          earthGroup.rotation.x = targetRotationX
+          earthGroup.rotation.y = combinedTargetY
+          earthGroup.scale.setScalar(targetScale)
+        } else {
+          earthGroup.rotation.x += (targetRotationX - earthGroup.rotation.x) * 0.03
+          earthGroup.rotation.y += (combinedTargetY - earthGroup.rotation.y) * rotationLerp
+          earthGroup.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.05)
+        }
 
         if (starField) {
           starField.rotation.y += 0.0004
-        }
-
-        if (mode === "focusing") {
-          focusTimer += 0.016
-          const progress = Math.min(1, focusTimer / focusDuration)
-          const ease = progress * progress * (3 - 2 * progress)
-          camera.position.lerpVectors(new THREE.Vector3(0, 1.15, 6.8), new THREE.Vector3(0, 0.95, 4.25), ease)
-          if (progress >= 1) mode = "focused"
         }
 
         camera.lookAt(0, 0, 0)

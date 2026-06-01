@@ -1,6 +1,13 @@
 import type { Business, LocationPayload, Review } from "@/lib/types"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000"
+// Default to same-origin so Next rewrites can proxy in dev.
+const rawBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/$/, "")
+const API_BASE =
+  typeof window !== "undefined" &&
+  rawBase.includes("localhost") &&
+  !["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? ""
+    : rawBase
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
