@@ -9,10 +9,13 @@ import sqlite3
 import re
 import os
 from datetime import datetime
+import ssl
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "localyze.db")
@@ -459,4 +462,4 @@ def help_chat():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)

@@ -25,7 +25,7 @@ import {
   verifyCaptcha,
 } from "@/lib/api"
 import type { Business, LocationPayload, Review } from "@/lib/types"
-import { Download, Heart, MapPin, MessageCircle, Search, Star } from "lucide-react"
+import { Download, Heart, MapPin, MessageCircle, Search, Star, ChevronDown } from "lucide-react"
 
 const categoryOptions = ["all", "food", "retail", "services", "saved"]
 
@@ -349,12 +349,15 @@ export default function HomePage() {
   const isDesktop = viewport.width >= 768
   const desktopResultsOpen = resultsOpen && isDesktop
   const shouldAnimateGlobe = isDesktop && (resultsOpen || resultsOpenRef.current)
-  const panelShiftX = desktopResultsOpen ? 19 : 0
+
+  // ── Panel is now 44vw (was 38vw) so cards have room to breathe ──
+  const panelWidthVw = 44
+  const panelShiftX = desktopResultsOpen ? 22 : 0
   const panelTranslateX = desktopResultsOpen ? "translateX(0)" : "translateX(-100%)"
   const panelOpacity = desktopResultsOpen ? 1 : 0
   const rightPanelPadding = 40
   const heroDiameter = viewport.width ? viewport.width * 1.04 : 1040
-  const rightPanelWidth = viewport.width * 0.62
+  const rightPanelWidth = viewport.width * (1 - panelWidthVw / 100)
   const panelDiameter =
     viewport.width && viewport.height
       ? Math.max(0, Math.min(rightPanelWidth, viewport.height) - rightPanelPadding * 2)
@@ -372,8 +375,8 @@ export default function HomePage() {
 
   return (
     <div id="top" className="relative h-screen overflow-hidden bg-background text-foreground">
-      <header className="relative h-[100vh] overflow-hidden hero-gradient">
-        <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+      <header className="relative min-h-screen hero-gradient">
+        <div className="absolute inset-0 flex items-center justify-center">
           <div
             className="relative"
             style={{
@@ -431,9 +434,12 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* ── Desktop results panel ── */}
         <div
-          className="absolute left-0 top-0 z-20 hidden h-full w-[38vw] md:flex"
+          className="absolute left-0 top-0 z-20 hidden h-full md:flex"
           style={{
+            width: `${panelWidthVw}vw`,
             transform: panelTranslateX,
             opacity: panelOpacity,
             transition: panelMotion,
@@ -441,72 +447,87 @@ export default function HomePage() {
           }}
         >
           <div className="flex h-full w-full flex-col border-r border-white/10 bg-slate-950/80 shadow-2xl backdrop-blur-xl">
-            <div className="flex items-start justify-between gap-4 px-6 pt-6">
-              <div className="space-y-1">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Results</p>
-                <p className="text-lg font-semibold text-white">
+
+            {/* Panel header */}
+            <div className="flex items-start justify-between gap-4 px-8 pt-7 pb-1">
+              <div className="space-y-0.5">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Results</p>
+                <p className="text-xl font-semibold text-white">
                   {currentZip ? `Businesses near ${currentZip}` : "Businesses near you"}
                 </p>
-                <p className="text-xs text-slate-400">
-                  {loading ? "Loading results..." : `${filteredBusinesses.length} businesses`}
+                <p className="text-xs text-slate-400 pt-0.5">
+                  {loading ? "Searching…" : `${filteredBusinesses.length} businesses found`}
                 </p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setResultsOpen(false)}>
+              <Button variant="ghost" size="sm" onClick={() => setResultsOpen(false)} className="mt-1 shrink-0">
                 Close
               </Button>
             </div>
-            <div className="mt-4 space-y-4 px-6">
-              <div className="flex flex-wrap gap-2">
-                {categoryOptions.map((item) => (
-                  <Button
-                    key={item}
-                    variant={category === item ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCategory(item)}
-                  >
-                    {item}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Input
-                  placeholder="Filter by name..."
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                  className="min-w-[180px] flex-1"
-                />
-                <select
-                  className="h-11 min-w-[160px] rounded-xl border border-white/15 bg-slate-950/60 px-4 text-sm text-foreground"
-                  value={sort}
-                  onChange={(event) => setSort(event.target.value)}
+
+            {/* Category pills */}
+            <div className="mt-5 flex flex-wrap gap-2 px-8">
+              {categoryOptions.map((item) => (
+                <Button
+                  key={item}
+                  variant={category === item ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCategory(item)}
+                  className="capitalize"
                 >
-                  <option value="default">Sort By</option>
-                  <option value="rating">Top Rated</option>
-                  <option value="reviews">Most Reviewed</option>
-                  <option value="name">Name (A-Z)</option>
-                </select>
+                  {item}
+                </Button>
+              ))}
+            </div>
+
+            {/* Filter controls — stacked for clarity */}
+            <div className="mt-4 flex flex-col gap-3 px-8">
+              <Input
+                placeholder="Filter by name…"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                className="w-full"
+              />
+              <div className="flex gap-8">
+                <div className="relative flex-1">
+                  <select
+                    className="appearance-none w-full h-11 rounded-xl border border-white/15 bg-slate-950/60 pl-4 pr-10 text-sm text-foreground"
+                    value={sort}
+                    onChange={(event) => setSort(event.target.value)}
+                  >
+                    <option value="default">Sort: Default</option>
+                    <option value="rating">Top Rated</option>
+                    <option value="reviews">Most Reviewed</option>
+                    <option value="name">Name (A–Z)</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleExport}
-                  className="w-full sm:w-auto"
+                  className="shrink-0"
                 >
                   <Download className="h-4 w-4" />
-                  Export Saved (PDF)
+                  Export PDF
                 </Button>
               </div>
             </div>
-            <div ref={resultsPanelRef} className="mt-4 flex-1 overflow-y-auto px-6 pb-8">
-              <div className="grid gap-4">
+
+            {/* Divider */}
+            <div className="mx-8 mt-5 border-t border-white/8" />
+
+            {/* Business cards list */}
+            <div ref={resultsPanelRef} className="mt-4 flex-1 overflow-y-auto px-8 pb-10">
+              <div className="flex flex-col gap-5">
                 {loading && (
-                  <Card className="text-center">
-                    <p className="text-sm text-slate-300">Searching for small businesses...</p>
+                  <Card className="text-center py-8">
+                    <p className="text-sm text-slate-400">Searching for local businesses…</p>
                   </Card>
                 )}
                 {!loading && filteredBusinesses.length === 0 && (
-                  <Card className="text-center">
-                    <p className="text-sm text-slate-300">
-                      Enter a zip code to find local businesses.
+                  <Card className="text-center py-8">
+                    <p className="text-sm text-slate-400">
+                      No businesses found. Try a different filter or zip code.
                     </p>
                   </Card>
                 )}
@@ -514,38 +535,53 @@ export default function HomePage() {
                   filteredBusinesses.map((business) => {
                     const isSaved = saved.some((item) => item.id === business.id)
                     return (
-                      <Card key={business.id} className="flex flex-col gap-4">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle>{business.name}</CardTitle>
-                            <CardDescription className="mt-1">
-                              {business.address}
+                      <Card key={business.id} className="flex flex-row gap-4 p-4">
+                        {/* Left: name, address, badges */}
+                        <div className="flex min-w-0 flex-1 flex-col gap-3">
+                          <div className="min-w-0">
+                            <CardTitle className="text-sm leading-snug">{business.name}</CardTitle>
+                            <CardDescription className="mt-0.5 flex items-center gap-1 text-xs">
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              {business.address || currentZip}
                             </CardDescription>
                           </div>
-                          <Button variant="ghost" size="sm" onClick={() => toggleSaved(business)}>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge>{business.category || "local"}</Badge>
+                            <Badge className="bg-emerald-400/15 text-emerald-300">
+                              <Star className="mr-1 h-3 w-3" />
+                              {business.rating?.toFixed(1) || "4.0"}
+                            </Badge>
+                            <Badge className="bg-sky-400/15 text-sky-300">
+                              {business.review_count || 0}{" "}
+                              {business.review_count === 1 ? "review" : "reviews"}
+                            </Badge>
+                            {business.deals && business.deals.length > 0 && (
+                              <Badge className="bg-amber-400/15 text-amber-300">
+                                {business.deals.length} deal{business.deals.length > 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right: heart + View Details stacked */}
+                        <div className="flex shrink-0 flex-col items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleSaved(business)}
+                            className="h-8 w-8 p-0"
+                          >
                             <Heart
-                              className={`h-4 w-4 ${isSaved ? "fill-emerald-400 text-emerald-400" : "text-white"}`}
+                              className={`h-4 w-4 ${isSaved ? "fill-emerald-400 text-emerald-400" : "text-slate-400"}`}
                             />
                           </Button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge>{business.category || "local"}</Badge>
-                          <Badge className="bg-emerald-400/20 text-emerald-300">
-                            <Star className="mr-1 h-3 w-3" />
-                            {business.rating?.toFixed(1) || "4.0"}
-                          </Badge>
-                          <Badge className="bg-sky-400/20 text-sky-200">
-                            {business.review_count || 0} reviews
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Button size="sm" onClick={() => openBusiness(business)}>
+                          <Button
+                            size="sm"
+                            onClick={() => openBusiness(business)}
+                            className="h-8 px-3 text-xs"
+                          >
                             View Details
                           </Button>
-                          <span className="text-xs text-slate-400">
-                            <MapPin className="mr-1 inline h-3 w-3" />
-                            {currentZip || "Zip not set"}
-                          </span>
                         </div>
                       </Card>
                     )
@@ -554,6 +590,8 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* Hero text */}
         <div className="relative z-10 flex h-full flex-col items-center justify-start px-6 pt-8 text-center pointer-events-none">
           <div className="absolute right-6 top-3 pointer-events-auto">
             <Button variant="ghost" size="sm" onClick={() => setChatOpen(true)}>
@@ -583,6 +621,7 @@ export default function HomePage() {
         </div>
       </header>
 
+      {/* ── Mobile results panel ── */}
       <main className="md:hidden">
         <div
           className="overflow-hidden"
@@ -594,21 +633,22 @@ export default function HomePage() {
             pointerEvents: resultsOpen ? "auto" : "none",
           }}
         >
-          <div className="mx-4 mb-10 mt-4 rounded-3xl border border-white/10 bg-slate-950/80 p-4 shadow-2xl backdrop-blur-xl">
+          <div className="mx-4 mb-10 mt-4 rounded-3xl border border-white/10 bg-slate-950/80 p-5 shadow-2xl backdrop-blur-xl">
             <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Results</p>
+              <div className="space-y-0.5">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Results</p>
                 <p className="text-base font-semibold text-white">
                   {currentZip ? `Businesses near ${currentZip}` : "Businesses near you"}
                 </p>
                 <p className="text-xs text-slate-400">
-                  {loading ? "Loading results..." : `${filteredBusinesses.length} businesses`}
+                  {loading ? "Searching…" : `${filteredBusinesses.length} businesses`}
                 </p>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setResultsOpen(false)}>
                 Close
               </Button>
             </div>
+
             <div className="mt-4 flex gap-2 overflow-x-auto pb-2 no-scrollbar">
               {categoryOptions.map((item) => (
                 <Button
@@ -616,42 +656,50 @@ export default function HomePage() {
                   variant={category === item ? "default" : "outline"}
                   size="sm"
                   onClick={() => setCategory(item)}
+                  className="capitalize shrink-0"
                 >
                   {item}
                 </Button>
               ))}
             </div>
-            <div className="mt-3 grid gap-3">
+
+            <div className="mt-3 flex flex-col gap-3">
               <Input
-                placeholder="Filter by name..."
+                placeholder="Filter by name…"
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
               />
-              <select
-                className="h-11 rounded-xl border border-white/15 bg-slate-950/60 px-4 text-sm text-foreground"
-                value={sort}
-                onChange={(event) => setSort(event.target.value)}
-              >
-                <option value="default">Sort By</option>
-                <option value="rating">Top Rated</option>
-                <option value="reviews">Most Reviewed</option>
-                <option value="name">Name (A-Z)</option>
-              </select>
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                <Download className="h-4 w-4" />
-                Export Saved (PDF)
-              </Button>
+              <div className="flex gap-3">
+                <div className="relative flex-1">
+                  <select
+                    className="appearance-none w-full h-11 rounded-xl border border-white/15 bg-slate-950/60 pl-4 pr-10 text-sm text-foreground"
+                    value={sort}
+                    onChange={(event) => setSort(event.target.value)}
+                  >
+                    <option value="default">Sort: Default</option>
+                    <option value="rating">Top Rated</option>
+                    <option value="reviews">Most Reviewed</option>
+                    <option value="name">Name (A–Z)</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
+                </div>
+                <Button variant="outline" size="sm" onClick={handleExport} className="shrink-0">
+                  <Download className="h-4 w-4" />
+                  PDF
+                </Button>
+              </div>
             </div>
-            <div className="mt-4">
+
+            <div className="mt-5">
               {loading && (
-                <Card className="text-center">
-                  <p className="text-sm text-slate-300">Searching for small businesses...</p>
+                <Card className="text-center py-6">
+                  <p className="text-sm text-slate-400">Searching for local businesses…</p>
                 </Card>
               )}
               {!loading && filteredBusinesses.length === 0 && (
-                <Card className="text-center">
-                  <p className="text-sm text-slate-300">
-                    Enter a zip code to find local businesses.
+                <Card className="text-center py-6">
+                  <p className="text-sm text-slate-400">
+                    No businesses found. Try a different zip code.
                   </p>
                 </Card>
               )}
@@ -662,39 +710,48 @@ export default function HomePage() {
                     return (
                       <Card
                         key={business.id}
-                        className="flex w-[82vw] shrink-0 snap-center flex-col gap-4"
+                        className="flex w-[82vw] shrink-0 snap-center flex-row gap-4 p-4"
                       >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle>{business.name}</CardTitle>
-                            <CardDescription className="mt-1">
-                              {business.address}
+                        {/* Left: name, address, badges */}
+                        <div className="flex min-w-0 flex-1 flex-col gap-3">
+                          <div className="min-w-0">
+                            <CardTitle className="text-sm leading-snug">{business.name}</CardTitle>
+                            <CardDescription className="mt-0.5 flex items-center gap-1 text-xs">
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              {business.address || currentZip}
                             </CardDescription>
                           </div>
-                          <Button variant="ghost" size="sm" onClick={() => toggleSaved(business)}>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge>{business.category || "local"}</Badge>
+                            <Badge className="bg-emerald-400/15 text-emerald-300">
+                              <Star className="mr-1 h-3 w-3" />
+                              {business.rating?.toFixed(1) || "4.0"}
+                            </Badge>
+                            <Badge className="bg-sky-400/15 text-sky-300">
+                              {business.review_count || 0} reviews
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Right: heart + View Details stacked */}
+                        <div className="flex shrink-0 flex-col items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleSaved(business)}
+                            className="h-8 w-8 p-0"
+                          >
                             <Heart
-                              className={`h-4 w-4 ${isSaved ? "fill-emerald-400 text-emerald-400" : "text-white"}`}
+                              className={`h-4 w-4 ${isSaved ? "fill-emerald-400 text-emerald-400" : "text-slate-400"}`}
                             />
                           </Button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge>{business.category || "local"}</Badge>
-                          <Badge className="bg-emerald-400/20 text-emerald-300">
-                            <Star className="mr-1 h-3 w-3" />
-                            {business.rating?.toFixed(1) || "4.0"}
-                          </Badge>
-                          <Badge className="bg-sky-400/20 text-sky-200">
-                            {business.review_count || 0} reviews
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Button size="sm" onClick={() => openBusiness(business)}>
+                          <Button
+                            size="sm"
+                            onClick={() => openBusiness(business)}
+                            className="h-8 px-3 text-xs"
+                          >
                             View Details
                           </Button>
-                          <span className="text-xs text-slate-400">
-                            <MapPin className="mr-1 inline h-3 w-3" />
-                            {currentZip || "Zip not set"}
-                          </span>
                         </div>
                       </Card>
                     )
@@ -706,6 +763,7 @@ export default function HomePage() {
         </div>
       </main>
 
+      {/* ── Business detail dialog ── */}
       <Dialog
         open={!!selectedBusiness}
         onOpenChange={(open) => {
@@ -762,22 +820,25 @@ export default function HomePage() {
                       setReviewForm({ ...reviewForm, name: event.target.value })
                     }
                   />
-                  <select
-                    className="h-11 rounded-xl border border-white/15 bg-slate-950/60 px-4 text-sm text-foreground"
-                    value={reviewForm.rating}
-                    onChange={(event) =>
-                      setReviewForm({
-                        ...reviewForm,
-                        rating: Number(event.target.value),
-                      })
-                    }
-                  >
-                    {[5, 4, 3, 2, 1].map((value) => (
-                      <option key={value} value={value}>
-                        {value} stars
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      className="appearance-none h-11 w-full rounded-xl border border-white/15 bg-slate-950/60 pl-4 pr-10 text-sm text-foreground"
+                      value={reviewForm.rating}
+                      onChange={(event) =>
+                        setReviewForm({
+                          ...reviewForm,
+                          rating: Number(event.target.value),
+                        })
+                      }
+                    >
+                      {[5, 4, 3, 2, 1].map((value) => (
+                        <option key={value} value={value}>
+                          {value} stars
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
+                  </div>
                   <Textarea
                     placeholder="Share your experience"
                     value={reviewForm.text}
@@ -823,6 +884,7 @@ export default function HomePage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Chat widget ── */}
       <div
         className={`fixed right-6 top-20 z-[10050] w-[min(420px,90vw)] transition duration-300 ${
           chatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"
