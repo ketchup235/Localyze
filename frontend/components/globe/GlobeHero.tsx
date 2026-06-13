@@ -35,24 +35,57 @@ const createCubicBezier = (p1x: number, p1y: number, p2x: number, p2y: number) =
   }
 }
 
-const cinematicEase = createCubicBezier(0.65, 0, 0.35, 1)
+// Accelerating ease for the zoom-in — slow lift-off, hard rush at the end so it
+// blends straight into the map's fly-in.
+const zoomEase = createCubicBezier(0.5, 0, 0.75, 0.2)
 
 type GlobeHeroProps = {
   focus?: LocationPayload | null
   spinMultiplier?: number
   scrollSpinProgress?: number
+  unzoomKey?: number
+  active?: boolean
+  wideZ?: number
+  onDiveComplete?: () => void
+  rollMsPerRad?: number
 }
 
 export function GlobeHero({
   focus,
   spinMultiplier = 1,
   scrollSpinProgress = 0,
+  unzoomKey = 0,
+  active = true,
+  wideZ = 6.6,
+  onDiveComplete,
+  rollMsPerRad = 500,
 }: GlobeHeroProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const focusRef = useRef<((lat: number, lon: number) => void) | null>(null)
+  const unzoomRef = useRef<(() => void) | null>(null)
+  const onDiveCompleteRef = useRef(onDiveComplete)
+  const rollMsPerRadRef = useRef(rollMsPerRad)
+
+  useEffect(() => {
+    onDiveCompleteRef.current = onDiveComplete
+  }, [onDiveComplete])
+
+  useEffect(() => {
+    rollMsPerRadRef.current = rollMsPerRad
+  }, [rollMsPerRad])
   const spinMultiplierRef = useRef(spinMultiplier)
   const scrollSpinProgressRef = useRef(scrollSpinProgress)
+  const activeRef = useRef(active)
+  const wideZRef = useRef(wideZ)
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
+
+  useEffect(() => {
+    wideZRef.current = wideZ
+  }, [wideZ])
 
   useEffect(() => {
     spinMultiplierRef.current = spinMultiplier
@@ -76,17 +109,25 @@ export function GlobeHero({
     let targetRotationX = -0.35
     let targetRotationY = (-initialLongitude * Math.PI) / 180 + 0.1
     let targetScale = 1
-    const focusDurationMs = 600
+    // Two-phase focus: rotate to the location, then dolly the camera in.
+    // Rotate duration scales with the angle so the spin keeps a steady speed.
+    let rotateDurationMs = 1100
+    const zoomDurationMs = 950
+    const unzoomDurationMs = 1000
+    let focusStage: "rotate" | "zoom" = "rotate"
     let focusStartTime = 0
+    let zoomStartTime = 0
+    let diveHandedOff = false
     let focusFromRotationX = targetRotationX
     let focusFromRotationY = targetRotationY
     let focusFromScale = targetScale
     let focusFromCamera: any = null
     let focusToRotationX = targetRotationX
     let focusToRotationY = targetRotationY
-    let focusToScale = 1.06
+    let focusToScale = 1
     let focusToCamera: any = null
-    let mode: "idle" | "focusing" | "focused" = "idle"
+    let unzoomStartTime = 0
+    let mode: "idle" | "focusing" | "focused" | "unzoom" = "idle"
 
     const canvas = canvasRef.current
     const container = containerRef.current
@@ -102,7 +143,15 @@ export function GlobeHero({
       scene.fog = new THREE.FogExp2(0x02060b, 0.03)
 
       camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120)
+      // The idle / scroll hero is viewed from a slightly raised vantage (y) for a
+      // more dramatic look. The zoom anchors below stay level (y = 0) so the
+      // dive / zoom-out keep a constant straight-on angle (no top-down tilt).
       camera.position.set(0, 1.1, 6.6)
+
+      // Camera anchor points for the dive / inverse zoom-out (level axis, same
+      // direction, different distance). SURFACE is a deep close-up.
+      const WIDE_CAM = new THREE.Vector3(0, 0, 6.6)
+      const SURFACE_CAM = new THREE.Vector3(0, 0, 2.32)
 
       renderer = new THREE.WebGLRenderer({
         canvas,
@@ -110,7 +159,7 @@ export function GlobeHero({
         alpha: true,
         powerPreference: "high-performance",
       })
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5))
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
       renderer.setSize(container.clientWidth, container.clientHeight, false)
       renderer.outputColorSpace = THREE.SRGBColorSpace
       renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -171,7 +220,6 @@ export function GlobeHero({
 
       earthMap.colorSpace = THREE.SRGBColorSpace
       nightMap.colorSpace = THREE.SRGBColorSpace
-      
 
       earthMap.anisotropy = renderer.capabilities.getMaxAnisotropy()
       normalMap.anisotropy = renderer.capabilities.getMaxAnisotropy()
@@ -190,21 +238,52 @@ export function GlobeHero({
       const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(2.15, 128, 128), earthMaterial)
       earthGroup.add(earthMesh)
 
-
       focusRef.current = (lat: number, lon: number) => {
         focusFromRotationX = earthGroup.rotation.x
         focusFromRotationY = earthGroup.rotation.y
         focusFromScale = earthGroup.scale.x
         focusFromCamera = camera.position.clone()
 
-        focusToRotationY = (-lon * Math.PI) / 180 + 0.1
-        focusToRotationX = -0.35 + ((lat * Math.PI) / 180) * 0.14
-        focusToScale = 1.06
-        focusToCamera = new THREE.Vector3(0, 1.0, 5.2)
+        // Bring this exact lat/lon to face the camera, dead centre.
+        focusToRotationX = (lat * Math.PI) / 180
+        const twoPi = Math.PI * 2
+        let toY = (-lon * Math.PI) / 180 - Math.PI / 2
+        // Approach from the same direction as the idle/scroll spin (decreasing Y)
+        // so the globe rolls "backwards" round to the US, never snapping forward.
+        toY += Math.floor((focusFromRotationY - toY) / twoPi) * twoPi
+        // Guarantee a clear roll rather than a tiny nudge when it's already close.
+        if (focusFromRotationY - toY < 0.6) toY -= twoPi
+        focusToRotationY = toY
 
+        // Constant angular speed: duration is strictly proportional to the angle,
+        // at `rollMsPerRad` ms per radian (the page passes a slower value for a
+        // re-search). The floor scales WITH the speed so a slower setting always
+        // takes effect — a fixed floor would clamp small + slow rolls to the same
+        // duration as fast ones, silently ignoring the slow-down.
+        const mpr = rollMsPerRadRef.current
+        const rollDelta = Math.abs(focusFromRotationY - toY)
+        rotateDurationMs = clamp(rollDelta * mpr, mpr * 2.0, 7000)
+        focusToScale = 1
+        focusToCamera = SURFACE_CAM.clone()
+        // The "wide" framing distance is set by the page from the viewport so the
+        // whole sphere fits the screen at CSS scale 1 (no clipping box).
+        WIDE_CAM.set(0, 0, wideZRef.current)
+
+        focusStage = "rotate"
         focusStartTime = performance.now()
+        diveHandedOff = false
         mode = "focusing"
       }
+
+      // Inverse of the dive: pull the camera back out from the surface to the
+      // wide view (exact time-mirror of the zoom-in), then resume idle spin.
+      // Used when swinging back to the globe to fly to a different zip.
+      unzoomRef.current = () => {
+        WIDE_CAM.set(0, 0, wideZRef.current)
+        unzoomStartTime = performance.now()
+        mode = "unzoom"
+      }
+
       const dragState = {
         isDragging: false,
         lastX: 0,
@@ -228,7 +307,16 @@ export function GlobeHero({
         lastHeight = nextHeight
         camera.aspect = nextWidth / nextHeight
         camera.updateProjectionMatrix()
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5))
+        // Cap the drawing-buffer resolution. The canvas still DISPLAYS at full
+        // size (CSS), but we never render more than ~1100px on the long side, so
+        // an oversized hero canvas doesn't cost millions of extra pixels/frame.
+        const bufferCap = 1100
+        const cappedRatio = Math.min(
+          window.devicePixelRatio,
+          1.5,
+          bufferCap / Math.max(nextWidth, nextHeight),
+        )
+        renderer.setPixelRatio(cappedRatio)
         renderer.setSize(nextWidth, nextHeight, false)
       }
 
@@ -273,18 +361,22 @@ export function GlobeHero({
       const animate = () => {
         frameId = window.requestAnimationFrame(animate)
         if (!earthGroup) return
+        // While the globe is hidden behind the map, keep the loop alive but skip
+        // the expensive update + render so it doesn't tax the GPU.
+        if (!activeRef.current) return
 
         const now = performance.now()
         const isFocusing = mode === "focusing"
+        const isUnzooming = mode === "unzoom"
         const isFocused = mode !== "idle"
         const scrollSpinProgressValue = Math.min(
           1,
           Math.max(0, scrollSpinProgressRef.current),
         )
         const scrollSpinRotation = scrollSpinProgressValue * Math.PI * 2
-        const baseSpinAmount = (isFocused ? 0.0003 : 0.0018) * spinMultiplierRef.current
+        const baseSpinAmount = (isFocused ? 0 : 0.0018) * spinMultiplierRef.current
         const spinAmount = baseSpinAmount * (scrollSpinProgressValue > 0 ? 0.25 : 1)
-        if (!isFocusing) {
+        if (!isFocusing && !isUnzooming) {
           targetRotationY -= spinAmount
           if (!dragState.isDragging) {
             dragState.velocityX *= 0.94
@@ -295,20 +387,54 @@ export function GlobeHero({
         }
 
         if (isFocusing && focusFromCamera && focusToCamera) {
-          const progress = Math.min(1, (now - focusStartTime) / focusDurationMs)
-          const eased = cinematicEase(progress)
-          targetRotationX = lerp(focusFromRotationX, focusToRotationX, eased)
-          targetRotationY = lerp(focusFromRotationY, focusToRotationY, eased)
-          targetScale = lerp(focusFromScale, focusToScale, eased)
-          camera.position.lerpVectors(focusFromCamera, focusToCamera, eased)
-          if (progress >= 1) mode = "focused"
+          if (focusStage === "rotate") {
+            // Phase 1 — spin the globe so the location tracks to dead centre.
+            // Rotation is LINEAR (constant angular speed); the camera eases back
+            // to the wide framing meanwhile.
+            const progress = Math.min(1, (now - focusStartTime) / rotateDurationMs)
+            targetRotationX = lerp(focusFromRotationX, focusToRotationX, progress)
+            targetRotationY = lerp(focusFromRotationY, focusToRotationY, progress)
+            targetScale = 1
+            // Hold at the wide framing while rolling (matches the scrolled globe
+            // size, so the hand-off is seamless and nothing is ever clipped).
+            camera.position.copy(WIDE_CAM)
+            if (progress >= 1) {
+              focusStage = "zoom"
+              zoomStartTime = now
+            }
+          } else {
+            // Phase 2 — dive in from the wide framing toward the centred location.
+            const progress = Math.min(1, (now - zoomStartTime) / zoomDurationMs)
+            const eased = zoomEase(progress)
+            targetRotationX = focusToRotationX
+            targetRotationY = focusToRotationY
+            targetScale = 1
+            camera.position.lerpVectors(WIDE_CAM, SURFACE_CAM, eased)
+            // Hand off to the map slightly before the dive bottoms out, so it
+            // doesn't zoom all the way in and linger before the switch.
+            if (progress >= 0.85 && !diveHandedOff) {
+              diveHandedOff = true
+              onDiveCompleteRef.current?.()
+            }
+            if (progress >= 1) mode = "focused"
+          }
         }
 
-        const combinedTargetY = isFocusing ? targetRotationY : targetRotationY - scrollSpinRotation
+        if (isUnzooming) {
+          // Time-mirror of the dive: lerp(WIDE, SURFACE, ease(1 - p)) starts at
+          // the surface and retraces the zoom-in exactly, back out to wide.
+          const progress = Math.min(1, (now - unzoomStartTime) / unzoomDurationMs)
+          camera.position.lerpVectors(WIDE_CAM, SURFACE_CAM, zoomEase(1 - progress))
+          targetScale = 1
+          if (progress >= 1) mode = "idle"
+        }
+
+        const combinedTargetY = targetRotationY - scrollSpinRotation
         const rotationLerp = scrollSpinProgressValue > 0 ? 0.12 : 0.02
-        if (isFocusing) {
+        if (isFocusing || isUnzooming) {
+          // Hold the rotation steady; only the camera moves during these phases.
           earthGroup.rotation.x = targetRotationX
-          earthGroup.rotation.y = combinedTargetY
+          earthGroup.rotation.y = targetRotationY
           earthGroup.scale.setScalar(targetScale)
         } else {
           earthGroup.rotation.x += (targetRotationX - earthGroup.rotation.x) * 0.03
@@ -352,6 +478,10 @@ export function GlobeHero({
     if (!focus || !focusRef.current) return
     focusRef.current(focus.lat, focus.lon)
   }, [focus])
+
+  useEffect(() => {
+    if (unzoomKey && unzoomRef.current) unzoomRef.current()
+  }, [unzoomKey])
 
   return (
     <div ref={containerRef} className="absolute inset-0">
