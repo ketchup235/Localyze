@@ -462,9 +462,15 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
 
   return (
     <div className="fixed bottom-6 left-6 z-[10040] flex items-center gap-3">
+      {/* Persistent live region so screen-reader users hear what the voice
+          assistant heard and did, even though the caption is visual. */}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {caption}
+      </span>
       <button
         type="button"
         onClick={runFlow}
+        aria-pressed={isActive}
         aria-label={isActive ? "Stop voice assistant" : "Start voice search"}
         className={`relative flex h-14 w-14 items-center justify-center rounded-full border shadow-2xl backdrop-blur transition ${
           isActive
@@ -484,7 +490,10 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
       </button>
 
       {caption && (
-        <div className="flex max-w-[min(360px,70vw)] items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/85 px-4 py-2 shadow-2xl backdrop-blur">
+        <div
+          aria-hidden="true"
+          className="flex max-w-[min(360px,70vw)] items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/85 px-4 py-2 shadow-2xl backdrop-blur"
+        >
           <p className="text-sm text-slate-200">{caption}</p>
           <button
             type="button"

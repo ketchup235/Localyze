@@ -129,6 +129,7 @@ frontend/
 docs/
   LANGUAGE_SELECTION.md   Why Python + TypeScript/React were chosen
   UX_DESIGN.md            Design rationale, user journey, accessibility
+  ACCESSIBILITY.md        Accessibility features (voice, ARIA, reduced motion)
   ATTRIBUTION.md          Third-party libraries and OpenStreetMap credit
 ```
 
