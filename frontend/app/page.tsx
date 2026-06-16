@@ -348,6 +348,8 @@ export default function HomePage() {
     <div id="top" className="relative h-screen overflow-hidden bg-background text-foreground">
       {/* ── Map layer (revealed after the globe zooms in; pan by drag, no scroll) ── */}
       <div
+        role="main"
+        aria-label="Map of local businesses"
         className="absolute inset-0 z-0"
         style={{
           opacity: phase === "map" ? 1 : 0,
@@ -598,7 +600,7 @@ export default function HomePage() {
       </div>
 
       {/* ── Mobile results panel ── */}
-      <main className="md:hidden">
+      <section className="md:hidden" aria-label="Business results">
         <div
           className="absolute bottom-0 left-0 right-0 z-20 overflow-hidden"
           style={{
@@ -725,7 +727,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </main>
+      </section>
 
       {/* ── Business detail dialog ── */}
       <BusinessDetailDialog
