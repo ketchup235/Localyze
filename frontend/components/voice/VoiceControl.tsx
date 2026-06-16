@@ -31,7 +31,7 @@ const TENS: Record<string, string> = {
 // teens and tens spoken as words ("nineteen three thirty five" → 19335), and
 // "double"/"triple" ("double three" → 33). Speech engines love to return zips as
 // a mix of these, which is why a naive single-digit map missed things like 19335.
-function speechToDigits(text: string): string {
+export function speechToDigits(text: string): string {
   const tokens = text
     .toLowerCase()
     // Strip separators the recognizer injects: hyphens ("thirty-five"), commas
@@ -86,7 +86,7 @@ function speechToDigits(text: string): string {
 
 // Pull a 5-digit zip out of a spoken phrase. Tries the word-aware parser first,
 // then falls back to raw digits already present in the text.
-function parseZip(text: string): string | null {
+export function parseZip(text: string): string | null {
   const fromWords = speechToDigits(text).match(/\d{5}/)
   if (fromWords) return fromWords[0]
   const rawDigits = text.replace(/\D/g, "").match(/\d{5}/)
