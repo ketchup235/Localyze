@@ -27,8 +27,20 @@ export async function fetchLocation(zip: string): Promise<LocationPayload> {
   return data.location
 }
 
-export async function fetchBusinesses(zip: string): Promise<Business[]> {
-  return request<Business[]>(`/api/businesses?zip=${zip}`)
+// Where the business list came from: a previous cache, a live OpenStreetMap
+// lookup, the bundled offline seed dataset, or nothing for an unknown zip.
+export type BusinessSource = "cache" | "live" | "seed" | "none"
+
+export type BusinessResult = {
+  businesses: Business[]
+  source: BusinessSource
+}
+
+export async function fetchBusinesses(zip: string): Promise<BusinessResult> {
+  const data = await request<{ businesses: Business[]; source: BusinessSource }>(
+    `/api/businesses?zip=${zip}`,
+  )
+  return { businesses: data.businesses ?? [], source: data.source ?? "none" }
 }
 
 export async function fetchReviews(id: string): Promise<Review[]> {

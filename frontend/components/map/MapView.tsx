@@ -314,5 +314,20 @@ export function MapView({
     })
   }, [ready, businesses, focus, selectedId])
 
-  return <div ref={containerRef} className="absolute inset-0 h-full w-full" />
+  return (
+    <div className="absolute inset-0 h-full w-full">
+      <div ref={containerRef} className="absolute inset-0 h-full w-full" />
+      {/* ODbL requires the data credit be shown wherever the map is displayed.
+          The Leaflet attribution control is disabled for styling, so we render a
+          small static credit instead. */}
+      <a
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noreferrer noopener"
+        className="absolute bottom-1 left-2 z-[500] rounded bg-slate-950/70 px-2 py-0.5 text-[10px] text-slate-400 hover:text-slate-200"
+      >
+        © OpenStreetMap contributors
+      </a>
+    </div>
+  )
 }

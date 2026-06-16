@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { GlobeHero } from "@/components/globe/GlobeHero"
 import { MapView } from "@/components/map/MapView"
+import { VoiceControl } from "@/components/voice/VoiceControl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -24,6 +25,7 @@ import {
   submitReview,
   verifyCaptcha,
 } from "@/lib/api"
+import type { BusinessSource } from "@/lib/api"
 import type { Business, LocationPayload, Review } from "@/lib/types"
 import { Download, Heart, MapPin, MessageCircle, Search, Star, ChevronDown } from "lucide-react"
 
@@ -44,6 +46,7 @@ export default function HomePage() {
   const [currentZip, setCurrentZip] = useState("")
   const [locationFocus, setLocationFocus] = useState<LocationPayload | null>(null)
   const [businesses, setBusinesses] = useState<Business[]>([])
+  const [dataSource, setDataSource] = useState<BusinessSource>("none")
   const [saved, setSaved] = useState<Business[]>([])
   const [category, setCategory] = useState("all")
   const [searchText, setSearchText] = useState("")
@@ -194,13 +197,14 @@ export default function HomePage() {
     transitionTimers.current.push(setTimeout(() => setResultsOpen(true), 250))
   }
 
-  const handleSearch = async () => {
-    const cleaned = zipInput.trim()
+  const handleSearch = async (zipArg?: string): Promise<Business[] | null> => {
+    const cleaned = (zipArg ?? zipInput).trim()
     if (!/^\d{5}$/.test(cleaned) || parseInt(cleaned, 10) < 500) {
       setZipError("Please enter a valid 5-digit US zip code.")
-      return
+      return null
     }
 
+    setZipInput(cleaned)
     setZipError("")
     setCurrentZip(cleaned)
     setCategory("all")
@@ -236,13 +240,25 @@ export default function HomePage() {
 
     try {
       setLoading(true)
-      const data = await fetchBusinesses(cleaned)
-      setBusinesses(data)
+      const result = await fetchBusinesses(cleaned)
+      setBusinesses(result.businesses)
+      setDataSource(result.source)
+      return result.businesses
     } catch {
       setZipError("Unable to load data. Please try again.")
+      return null
     } finally {
       setLoading(false)
     }
+  }
+
+  // Voice: run the search for a spoken zip, then report the count once the
+  // globe → map animation has had time to play.
+  const handleVoiceSearch = async (zip: string) => {
+    const data = await handleSearch(zip)
+    if (!data) return null
+    await new Promise((resolve) => setTimeout(resolve, 2600))
+    return { count: data.length, zip }
   }
 
   const toggleSaved = (business: Business) => {
@@ -324,7 +340,8 @@ export default function HomePage() {
         discount: couponForm.discount.trim(),
       })
       const refreshed = await fetchBusinesses(currentZip)
-      setBusinesses(refreshed)
+      setBusinesses(refreshed.businesses)
+      setDataSource(refreshed.source)
       setCouponForm({ code: "", discount: "" })
       const newCaptcha = await fetchCaptcha()
       setCaptchaQuestion(newCaptcha.question)
@@ -334,26 +351,109 @@ export default function HomePage() {
     }
   }
 
+  // Build a customizable, analyzable report of saved businesses: a summary with
+  // headline metrics and a category breakdown, then a per-business table with
+  // ratings, review counts, and deals. Rendered to a print window (→ PDF) with no
+  // extra dependencies. Respects the current sort so the report mirrors the view.
   const handleExport = () => {
     if (!saved.length) return
+
+    const escapeHtml = (value: string) =>
+      value.replace(/[&<>"]/g, (ch) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch] || ch,
+      )
+
+    const ratingOf = (b: Business) => b.rating ?? b.base_rating ?? 0
+    const rows = [...saved].sort((a, b) => {
+      if (sort === "reviews") return (b.review_count || 0) - (a.review_count || 0)
+      if (sort === "name") return (a.name || "").localeCompare(b.name || "")
+      return ratingOf(b) - ratingOf(a) // default + "rating" → best rated first
+    })
+
+    const total = rows.length
+    const avgRating = total ? rows.reduce((sum, b) => sum + ratingOf(b), 0) / total : 0
+    const totalReviews = rows.reduce((sum, b) => sum + (b.review_count || 0), 0)
+    const totalDeals = rows.reduce((sum, b) => sum + (b.deals?.length || 0), 0)
+    const byCategory = rows.reduce<Record<string, number>>((acc, b) => {
+      const key = (b.category || "local").toLowerCase()
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+    const generatedAt = new Date().toLocaleString()
+
+    const summaryCells = [
+      ["Saved businesses", String(total)],
+      ["Average rating", `${avgRating.toFixed(1)} / 5`],
+      ["Total reviews", String(totalReviews)],
+      ["Active deals", String(totalDeals)],
+    ]
+      .map(
+        ([label, value]) =>
+          `<div style="flex:1;min-width:120px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;">
+             <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;">${label}</div>
+             <div style="font-size:22px;font-weight:700;color:#0f172a;">${value}</div>
+           </div>`,
+      )
+      .join("")
+
+    const categoryRows = Object.entries(byCategory)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, count]) => `<li><strong>${escapeHtml(cat)}</strong>: ${count}</li>`)
+      .join("")
+
+    const tableRows = rows
+      .map(
+        (b) => `
+        <tr>
+          <td>${escapeHtml(b.name)}</td>
+          <td>${escapeHtml(b.category || "local")}</td>
+          <td>${ratingOf(b).toFixed(1)}</td>
+          <td>${b.review_count || 0}</td>
+          <td>${
+            b.deals && b.deals.length
+              ? b.deals.map((d) => `${escapeHtml(d.code)} (${escapeHtml(d.discount)})`).join("<br/>")
+              : "—"
+          }</td>
+          <td>${escapeHtml(b.address || currentZip)}</td>
+        </tr>`,
+      )
+      .join("")
+
     const content = `
       <html>
-        <head><title>Localyze Saved Businesses</title></head>
-        <body style="font-family: Inter, sans-serif; padding: 24px;">
-          <h1>Saved Businesses</h1>
-          ${saved
-            .map(
-              (b) => `
-              <div style="margin-bottom: 16px;">
-                <strong>${b.name}</strong><br/>
-                ${b.category || ""} | ${b.address || ""}
-              </div>
-            `,
-            )
-            .join("")}
+        <head>
+          <title>Localyze Saved Businesses Report</title>
+          <style>
+            body { font-family: Inter, system-ui, sans-serif; color:#0f172a; padding:32px; }
+            h1 { margin:0 0 4px; font-size:24px; }
+            .meta { color:#64748b; font-size:12px; margin-bottom:20px; }
+            .summary { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
+            h2 { font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:#475569; margin:24px 0 8px; }
+            ul { margin:0 0 8px 18px; padding:0; }
+            table { width:100%; border-collapse:collapse; font-size:13px; }
+            th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #e2e8f0; vertical-align:top; }
+            th { background:#f8fafc; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#475569; }
+          </style>
+        </head>
+        <body>
+          <h1>Localyze — Saved Businesses Report</h1>
+          <div class="meta">
+            Generated ${generatedAt}${currentZip ? ` · area ${escapeHtml(currentZip)}` : ""} · sorted by ${escapeHtml(sort)}
+          </div>
+          <div class="summary">${summaryCells}</div>
+          <h2>Category breakdown</h2>
+          <ul>${categoryRows}</ul>
+          <h2>Businesses</h2>
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Category</th><th>Rating</th><th>Reviews</th><th>Deals</th><th>Location</th></tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>
         </body>
       </html>
     `
+
     const win = window.open("", "_blank")
     if (!win) return
     win.document.write(content)
@@ -497,7 +597,7 @@ export default function HomePage() {
                 />
               </div>
               <div className="absolute left-1/2 top-1/2 -translate-x-1/2 translate-y-16">
-                <Button onClick={handleSearch} size="lg" className="h-14 px-10 text-lg sm:h-16 sm:px-12">
+                <Button onClick={() => handleSearch()} size="lg" className="h-14 px-10 text-lg sm:h-16 sm:px-12">
                   <Search className="h-4 w-4" />
                   Search
                 </Button>
@@ -557,9 +657,14 @@ export default function HomePage() {
               <p className="text-xl font-semibold text-white">
                 {currentZip ? `Businesses near ${currentZip}` : "Businesses near you"}
               </p>
-              <p className="text-xs text-slate-400 pt-0.5">
+              <p className="text-xs text-slate-400 pt-0.5" aria-live="polite">
                 {loading ? "Searching…" : `${filteredBusinesses.length} businesses found`}
               </p>
+              {dataSource === "seed" && !loading && (
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                  Offline sample data
+                </span>
+              )}
             </div>
             <Button variant="ghost" size="sm" onClick={() => setResultsOpen(false)} className="mt-1 shrink-0">
               Close
@@ -579,7 +684,7 @@ export default function HomePage() {
                 aria-label="Search another zip code"
                 className="h-10"
               />
-              <Button onClick={handleSearch} size="sm" className="h-10 px-4 shrink-0">
+              <Button onClick={() => handleSearch()} size="sm" className="h-10 px-4 shrink-0">
                 <Search className="h-4 w-4" />
               </Button>
             </div>
@@ -684,6 +789,8 @@ export default function HomePage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => toggleSaved(business)}
+                          aria-label={isSaved ? `Remove ${business.name} from saved` : `Save ${business.name}`}
+                          aria-pressed={isSaved}
                           className="h-8 w-8 p-0"
                         >
                           <Heart
@@ -724,6 +831,11 @@ export default function HomePage() {
                 <p className="text-xs text-slate-400">
                   {loading ? "Searching…" : `${filteredBusinesses.length} businesses`}
                 </p>
+                {dataSource === "seed" && !loading && (
+                  <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                    Offline sample data
+                  </span>
+                )}
               </div>
               <Button variant="ghost" size="sm" onClick={() => setResultsOpen(false)}>
                 Close
@@ -742,7 +854,7 @@ export default function HomePage() {
                 aria-label="Search another zip code"
                 className="h-10"
               />
-              <Button onClick={handleSearch} size="sm" className="h-10 px-4 shrink-0">
+              <Button onClick={() => handleSearch()} size="sm" className="h-10 px-4 shrink-0">
                 <Search className="h-4 w-4" />
               </Button>
             </div>
@@ -950,6 +1062,7 @@ export default function HomePage() {
                     {captchaQuestion || "Loading captcha..."}
                     <Input
                       placeholder="Answer"
+                      aria-label="Answer the verification question"
                       value={captchaAnswer}
                       onChange={(event) => setCaptchaAnswer(event.target.value)}
                       className="mt-2"
@@ -1015,6 +1128,12 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* ── Voice assistant (bottom-left) ── */}
+      <VoiceControl
+        onSearchZip={handleVoiceSearch}
+        onSetCategory={setCategory}
+        onSetSort={setSort}
+      />
     </div>
   )
 }

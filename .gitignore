@@ -19,3 +19,6 @@ node_modules/
 
 # Next.js build output
 .next/
+# OS / editor / build noise
+.DS_Store
+*.tsbuildinfo
