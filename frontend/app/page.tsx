@@ -4,22 +4,19 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { GlobeHero } from "@/components/globe/GlobeHero"
 import { MapView } from "@/components/map/MapView"
 import { VoiceControl } from "@/components/voice/VoiceControl"
+import { BusinessCard } from "@/components/business/BusinessCard"
+import {
+  BusinessDetailDialog,
+  type CouponForm,
+  type ReviewForm,
+} from "@/components/business/BusinessDetailDialog"
+import { HelpChat } from "@/components/chat/HelpChat"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardDescription, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Card } from "@/components/ui/card"
 import {
   fetchBusinesses,
   fetchCaptcha,
-  fetchHelp,
   fetchReviews,
   submitCoupon,
   submitReview,
@@ -27,18 +24,12 @@ import {
 } from "@/lib/api"
 import type { BusinessSource } from "@/lib/api"
 import type { Business, LocationPayload, Review } from "@/lib/types"
-import { Download, Heart, MapPin, MessageCircle, Search, Star, ChevronDown } from "lucide-react"
+import { ZIP_LOCATIONS, getFallbackLocation } from "@/lib/locations"
+import { printSavedBusinessesReport } from "@/lib/report"
+import { useSavedBusinesses } from "@/hooks/useSavedBusinesses"
+import { Download, MessageCircle, Search, ChevronDown } from "lucide-react"
 
 const categoryOptions = ["all", "food", "retail", "services", "saved"]
-
-// Hard-coded, verified zip-code centroids. The globe/map fly to exactly these
-// coordinates so the three supported zips always land on the right spot.
-const ZIP_LOCATIONS: Record<string, LocationPayload> = {
-  "10001": { zip: "10001", lat: 40.7506, lon: -73.9971, label: "New York City" },
-  "19335": { zip: "19335", lat: 40.0062, lon: -75.7033, label: "Downingtown, PA" },
-  "60601": { zip: "60601", lat: 41.8856, lon: -87.6215, label: "Chicago" },
-  "90210": { zip: "90210", lat: 34.103, lon: -118.4105, label: "Beverly Hills" },
-}
 
 export default function HomePage() {
   const [zipInput, setZipInput] = useState("")
@@ -47,7 +38,7 @@ export default function HomePage() {
   const [locationFocus, setLocationFocus] = useState<LocationPayload | null>(null)
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [dataSource, setDataSource] = useState<BusinessSource>("none")
-  const [saved, setSaved] = useState<Business[]>([])
+  const { saved, isSaved, toggleSaved } = useSavedBusinesses()
   const [category, setCategory] = useState("all")
   const [searchText, setSearchText] = useState("")
   const [sort, setSort] = useState("default")
@@ -56,16 +47,9 @@ export default function HomePage() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [captchaQuestion, setCaptchaQuestion] = useState("")
   const [captchaAnswer, setCaptchaAnswer] = useState("")
-  const [reviewForm, setReviewForm] = useState({ name: "", rating: 5, text: "" })
-  const [couponForm, setCouponForm] = useState({ code: "", discount: "" })
+  const [reviewForm, setReviewForm] = useState<ReviewForm>({ name: "", rating: 5, text: "" })
+  const [couponForm, setCouponForm] = useState<CouponForm>({ code: "", discount: "" })
   const [chatOpen, setChatOpen] = useState(false)
-  const [chatInput, setChatInput] = useState("")
-  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([
-    {
-      role: "assistant",
-      text: "Hi! Ask me anything about Localyze: zip search, filters, saving, reviews, or coupons.",
-    },
-  ])
   const [resultsOpen, setResultsOpen] = useState(false)
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const [heroProgress, setHeroProgress] = useState(0)
@@ -79,21 +63,6 @@ export default function HomePage() {
   const resultsPanelRef = useRef<HTMLDivElement | null>(null)
   const resultsOpenRef = useRef(false)
   const transitionTimers = useRef<ReturnType<typeof setTimeout>[]>([])
-
-  useEffect(() => {
-    const savedRaw = window.localStorage.getItem("localyze_saved")
-    if (savedRaw) {
-      try {
-        setSaved(JSON.parse(savedRaw))
-      } catch {
-        setSaved([])
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    window.localStorage.setItem("localyze_saved", JSON.stringify(saved))
-  }, [saved])
 
   useEffect(() => {
     heroProgressRef.current = heroProgress
@@ -167,29 +136,6 @@ export default function HomePage() {
     return result
   }, [businesses, saved, category, searchText, sort])
 
-  const getFallbackLocation = (zip: string): LocationPayload | null => {
-    const exact = ZIP_LOCATIONS[zip]
-    if (exact) return { ...exact, zip }
-
-    const zipNumber = Number.parseInt(zip, 10)
-    if (!Number.isFinite(zipNumber)) return null
-
-    const regions = [
-      { min: 0, max: 19999, lat: 40.7, lon: -74.0, label: "Northeast" },
-      { min: 20000, max: 39999, lat: 35.4, lon: -82.2, label: "Southeast" },
-      { min: 40000, max: 59999, lat: 41.6, lon: -87.6, label: "Midwest" },
-      { min: 60000, max: 79999, lat: 38.7, lon: -97.0, label: "South Central" },
-      { min: 80000, max: 89999, lat: 39.6, lon: -111.9, label: "Mountain West" },
-      { min: 90000, max: 96999, lat: 34.1, lon: -118.2, label: "California" },
-      { min: 97000, max: 99999, lat: 47.2, lon: -122.3, label: "Pacific Northwest" },
-    ]
-
-    const region = regions.find((entry) => zipNumber >= entry.min && zipNumber <= entry.max)
-    if (!region) return null
-
-    return { zip, lat: region.lat, lon: region.lon, label: region.label }
-  }
-
   // Fired by the globe as its dive nears the surface — crossfade to the map right
   // away (no lingering at max zoom), then open the results panel.
   const handleDiveComplete = () => {
@@ -259,15 +205,6 @@ export default function HomePage() {
     if (!data) return null
     await new Promise((resolve) => setTimeout(resolve, 2600))
     return { count: data.length, zip }
-  }
-
-  const toggleSaved = (business: Business) => {
-    const exists = saved.some((b) => b.id === business.id)
-    if (exists) {
-      setSaved(saved.filter((b) => b.id !== business.id))
-    } else {
-      setSaved([...saved, business])
-    }
   }
 
   const openBusiness = async (business: Business) => {
@@ -348,133 +285,6 @@ export default function HomePage() {
       setCaptchaAnswer("")
     } catch {
       setCaptchaQuestion("Unable to submit coupon. Try again.")
-    }
-  }
-
-  // Build a customizable, analyzable report of saved businesses: a summary with
-  // headline metrics and a category breakdown, then a per-business table with
-  // ratings, review counts, and deals. Rendered to a print window (→ PDF) with no
-  // extra dependencies. Respects the current sort so the report mirrors the view.
-  const handleExport = () => {
-    if (!saved.length) return
-
-    const escapeHtml = (value: string) =>
-      value.replace(/[&<>"]/g, (ch) =>
-        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch] || ch,
-      )
-
-    const ratingOf = (b: Business) => b.rating ?? b.base_rating ?? 0
-    const rows = [...saved].sort((a, b) => {
-      if (sort === "reviews") return (b.review_count || 0) - (a.review_count || 0)
-      if (sort === "name") return (a.name || "").localeCompare(b.name || "")
-      return ratingOf(b) - ratingOf(a) // default + "rating" → best rated first
-    })
-
-    const total = rows.length
-    const avgRating = total ? rows.reduce((sum, b) => sum + ratingOf(b), 0) / total : 0
-    const totalReviews = rows.reduce((sum, b) => sum + (b.review_count || 0), 0)
-    const totalDeals = rows.reduce((sum, b) => sum + (b.deals?.length || 0), 0)
-    const byCategory = rows.reduce<Record<string, number>>((acc, b) => {
-      const key = (b.category || "local").toLowerCase()
-      acc[key] = (acc[key] || 0) + 1
-      return acc
-    }, {})
-    const generatedAt = new Date().toLocaleString()
-
-    const summaryCells = [
-      ["Saved businesses", String(total)],
-      ["Average rating", `${avgRating.toFixed(1)} / 5`],
-      ["Total reviews", String(totalReviews)],
-      ["Active deals", String(totalDeals)],
-    ]
-      .map(
-        ([label, value]) =>
-          `<div style="flex:1;min-width:120px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;">
-             <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;">${label}</div>
-             <div style="font-size:22px;font-weight:700;color:#0f172a;">${value}</div>
-           </div>`,
-      )
-      .join("")
-
-    const categoryRows = Object.entries(byCategory)
-      .sort((a, b) => b[1] - a[1])
-      .map(([cat, count]) => `<li><strong>${escapeHtml(cat)}</strong>: ${count}</li>`)
-      .join("")
-
-    const tableRows = rows
-      .map(
-        (b) => `
-        <tr>
-          <td>${escapeHtml(b.name)}</td>
-          <td>${escapeHtml(b.category || "local")}</td>
-          <td>${ratingOf(b).toFixed(1)}</td>
-          <td>${b.review_count || 0}</td>
-          <td>${
-            b.deals && b.deals.length
-              ? b.deals.map((d) => `${escapeHtml(d.code)} (${escapeHtml(d.discount)})`).join("<br/>")
-              : "—"
-          }</td>
-          <td>${escapeHtml(b.address || currentZip)}</td>
-        </tr>`,
-      )
-      .join("")
-
-    const content = `
-      <html>
-        <head>
-          <title>Localyze Saved Businesses Report</title>
-          <style>
-            body { font-family: Inter, system-ui, sans-serif; color:#0f172a; padding:32px; }
-            h1 { margin:0 0 4px; font-size:24px; }
-            .meta { color:#64748b; font-size:12px; margin-bottom:20px; }
-            .summary { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
-            h2 { font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:#475569; margin:24px 0 8px; }
-            ul { margin:0 0 8px 18px; padding:0; }
-            table { width:100%; border-collapse:collapse; font-size:13px; }
-            th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #e2e8f0; vertical-align:top; }
-            th { background:#f8fafc; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#475569; }
-          </style>
-        </head>
-        <body>
-          <h1>Localyze — Saved Businesses Report</h1>
-          <div class="meta">
-            Generated ${generatedAt}${currentZip ? ` · area ${escapeHtml(currentZip)}` : ""} · sorted by ${escapeHtml(sort)}
-          </div>
-          <div class="summary">${summaryCells}</div>
-          <h2>Category breakdown</h2>
-          <ul>${categoryRows}</ul>
-          <h2>Businesses</h2>
-          <table>
-            <thead>
-              <tr><th>Name</th><th>Category</th><th>Rating</th><th>Reviews</th><th>Deals</th><th>Location</th></tr>
-            </thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-        </body>
-      </html>
-    `
-
-    const win = window.open("", "_blank")
-    if (!win) return
-    win.document.write(content)
-    win.document.close()
-    win.focus()
-    win.print()
-  }
-
-  const handleSendChat = async () => {
-    if (!chatInput.trim()) return
-    const message = chatInput.trim()
-    setChatInput("")
-    setChatMessages((prev) => [...prev, { role: "user", text: message }])
-    try {
-      const response = await fetchHelp(message)
-      setChatMessages((prev) => [...prev, { role: "assistant", text: response.reply }])
-    } catch {
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: "Sorry, I could not connect. Please try again." },
-      ])
     }
   }
 
@@ -728,7 +538,12 @@ export default function HomePage() {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
               </div>
-              <Button variant="outline" size="sm" onClick={handleExport} className="shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => printSavedBusinessesReport(saved, sort, currentZip)}
+                className="shrink-0"
+              >
                 <Download className="h-4 w-4" />
                 Export PDF
               </Button>
@@ -754,56 +569,16 @@ export default function HomePage() {
                 </Card>
               )}
               {!loading &&
-                filteredBusinesses.map((business) => {
-                  const isSaved = saved.some((item) => item.id === business.id)
-                  return (
-                    <Card key={business.id} className="flex flex-row gap-4 p-4">
-                      <div className="flex min-w-0 flex-1 flex-col gap-3">
-                        <div className="min-w-0">
-                          <CardTitle className="text-sm leading-snug">{business.name}</CardTitle>
-                          <CardDescription className="mt-0.5 flex items-center gap-1 text-xs">
-                            <MapPin className="h-3 w-3 shrink-0" />
-                            {business.address || currentZip}
-                          </CardDescription>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          <Badge>{business.category || "local"}</Badge>
-                          <Badge className="bg-emerald-400/15 text-emerald-300">
-                            <Star className="mr-1 h-3 w-3" />
-                            {business.rating?.toFixed(1) || "4.0"}
-                          </Badge>
-                          <Badge className="bg-sky-400/15 text-sky-300">
-                            {business.review_count || 0}{" "}
-                            {business.review_count === 1 ? "review" : "reviews"}
-                          </Badge>
-                          {business.deals && business.deals.length > 0 && (
-                            <Badge className="bg-amber-400/15 text-amber-300">
-                              {business.deals.length} deal{business.deals.length > 1 ? "s" : ""}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex shrink-0 flex-col items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleSaved(business)}
-                          aria-label={isSaved ? `Remove ${business.name} from saved` : `Save ${business.name}`}
-                          aria-pressed={isSaved}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Heart
-                            className={`h-4 w-4 ${isSaved ? "fill-emerald-400 text-emerald-400" : "text-slate-400"}`}
-                          />
-                        </Button>
-                        <Button size="sm" onClick={() => openBusiness(business)} className="h-8 px-3 text-xs">
-                          View Details
-                        </Button>
-                      </div>
-                    </Card>
-                  )
-                })}
+                filteredBusinesses.map((business) => (
+                  <BusinessCard
+                    key={business.id}
+                    business={business}
+                    isSaved={isSaved(business.id)}
+                    currentZip={currentZip}
+                    onToggleSave={toggleSaved}
+                    onOpen={openBusiness}
+                  />
+                ))}
             </div>
           </div>
         </div>
@@ -893,7 +668,12 @@ export default function HomePage() {
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
                 </div>
-                <Button variant="outline" size="sm" onClick={handleExport} className="shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => printSavedBusinessesReport(saved, sort, currentZip)}
+                  className="shrink-0"
+                >
                   <Download className="h-4 w-4" />
                   PDF
                 </Button>
@@ -915,51 +695,18 @@ export default function HomePage() {
               )}
               {!loading && filteredBusinesses.length > 0 && (
                 <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 no-scrollbar">
-                  {filteredBusinesses.map((business) => {
-                    const isSaved = saved.some((item) => item.id === business.id)
-                    return (
-                      <Card
-                        key={business.id}
-                        className="flex w-[82vw] shrink-0 snap-center flex-row gap-4 p-4"
-                      >
-                        <div className="flex min-w-0 flex-1 flex-col gap-3">
-                          <div className="min-w-0">
-                            <CardTitle className="text-sm leading-snug">{business.name}</CardTitle>
-                            <CardDescription className="mt-0.5 flex items-center gap-1 text-xs">
-                              <MapPin className="h-3 w-3 shrink-0" />
-                              {business.address || currentZip}
-                            </CardDescription>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            <Badge>{business.category || "local"}</Badge>
-                            <Badge className="bg-emerald-400/15 text-emerald-300">
-                              <Star className="mr-1 h-3 w-3" />
-                              {business.rating?.toFixed(1) || "4.0"}
-                            </Badge>
-                            <Badge className="bg-sky-400/15 text-sky-300">
-                              {business.review_count || 0} reviews
-                            </Badge>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 flex-col items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleSaved(business)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Heart
-                              className={`h-4 w-4 ${isSaved ? "fill-emerald-400 text-emerald-400" : "text-slate-400"}`}
-                            />
-                          </Button>
-                          <Button size="sm" onClick={() => openBusiness(business)} className="h-8 px-3 text-xs">
-                            View Details
-                          </Button>
-                        </div>
-                      </Card>
-                    )
-                  })}
+                  {filteredBusinesses.map((business) => (
+                    <BusinessCard
+                      key={business.id}
+                      business={business}
+                      isSaved={isSaved(business.id)}
+                      currentZip={currentZip}
+                      onToggleSave={toggleSaved}
+                      onOpen={openBusiness}
+                      className="w-[82vw] shrink-0 snap-center"
+                      showDeals={false}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -968,165 +715,23 @@ export default function HomePage() {
       </main>
 
       {/* ── Business detail dialog ── */}
-      <Dialog
-        open={!!selectedBusiness}
-        onOpenChange={(open) => {
-          if (!open) setSelectedBusiness(null)
-        }}
-      >
-        <DialogContent className="max-w-3xl">
-          {selectedBusiness && (
-            <div className="space-y-6">
-              <DialogHeader>
-                <DialogTitle>{selectedBusiness.name}</DialogTitle>
-                <DialogDescription>{selectedBusiness.address}</DialogDescription>
-              </DialogHeader>
-
-              <div className="flex flex-wrap gap-2">
-                <Badge>{selectedBusiness.category || "local"}</Badge>
-                <Badge className="bg-emerald-400/20 text-emerald-300">
-                  <Star className="mr-1 h-3 w-3" />
-                  {selectedBusiness.rating?.toFixed(1) || "4.0"}
-                </Badge>
-                <Badge className="bg-sky-400/20 text-sky-200">
-                  {selectedBusiness.review_count || 0} reviews
-                </Badge>
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-slate-200">Recent Reviews</h3>
-                {reviews.length === 0 ? (
-                  <p className="text-sm text-slate-400">
-                    No reviews yet. Be the first to share your experience.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {reviews.map((review, index) => (
-                      <Card key={`${review.user}-${index}`} className="space-y-2">
-                        <CardTitle className="text-base">{review.user}</CardTitle>
-                        <CardDescription className="text-sm">
-                          {review.rating.toFixed(1)} / 5
-                        </CardDescription>
-                        <p className="text-sm text-slate-200">{review.text}</p>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-200">Leave a Review</h3>
-                  <Input
-                    placeholder="Your name"
-                    value={reviewForm.name}
-                    onChange={(event) => setReviewForm({ ...reviewForm, name: event.target.value })}
-                  />
-                  <div className="relative">
-                    <select
-                      className="appearance-none h-11 w-full rounded-xl border border-white/15 bg-slate-950/60 pl-4 pr-10 text-sm text-foreground"
-                      value={reviewForm.rating}
-                      onChange={(event) =>
-                        setReviewForm({ ...reviewForm, rating: Number(event.target.value) })
-                      }
-                    >
-                      {[5, 4, 3, 2, 1].map((value) => (
-                        <option key={value} value={value}>
-                          {value} stars
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
-                  </div>
-                  <Textarea
-                    placeholder="Share your experience"
-                    value={reviewForm.text}
-                    onChange={(event) => setReviewForm({ ...reviewForm, text: event.target.value })}
-                  />
-                </div>
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-200">Share a Coupon</h3>
-                  <Input
-                    placeholder="Coupon code"
-                    value={couponForm.code}
-                    onChange={(event) => setCouponForm({ ...couponForm, code: event.target.value })}
-                  />
-                  <Input
-                    placeholder="Discount details"
-                    value={couponForm.discount}
-                    onChange={(event) =>
-                      setCouponForm({ ...couponForm, discount: event.target.value })
-                    }
-                  />
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
-                    {captchaQuestion || "Loading captcha..."}
-                    <Input
-                      placeholder="Answer"
-                      aria-label="Answer the verification question"
-                      value={captchaAnswer}
-                      onChange={(event) => setCaptchaAnswer(event.target.value)}
-                      className="mt-2"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={handleReviewSubmit}>Submit Review</Button>
-                <Button variant="outline" onClick={handleCouponSubmit}>
-                  Submit Coupon
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <BusinessDetailDialog
+        business={selectedBusiness}
+        reviews={reviews}
+        reviewForm={reviewForm}
+        couponForm={couponForm}
+        captchaQuestion={captchaQuestion}
+        captchaAnswer={captchaAnswer}
+        onReviewFormChange={setReviewForm}
+        onCouponFormChange={setCouponForm}
+        onCaptchaAnswerChange={setCaptchaAnswer}
+        onReviewSubmit={handleReviewSubmit}
+        onCouponSubmit={handleCouponSubmit}
+        onClose={() => setSelectedBusiness(null)}
+      />
 
       {/* ── Chat widget ── */}
-      <div
-        className={`fixed right-6 top-20 z-[10050] w-[min(420px,90vw)] transition duration-300 ${
-          chatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"
-        }`}
-      >
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 shadow-2xl backdrop-blur">
-          <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-white">Localyze Assistant</p>
-              <p className="text-xs text-slate-400">Intelligent help, powered by your data.</p>
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setChatOpen(false)}>
-              Close
-            </Button>
-          </div>
-          <div className="space-y-4 p-4">
-            <div className="max-h-72 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-3">
-              {chatMessages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`rounded-xl px-3 py-2 text-sm ${
-                    message.role === "user"
-                      ? "ml-auto bg-emerald-400 text-slate-950"
-                      : "bg-slate-900 text-slate-200"
-                  }`}
-                >
-                  {message.text}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Ask a question..."
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") handleSendChat()
-                }}
-              />
-              <Button onClick={handleSendChat}>Send</Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <HelpChat open={chatOpen} onClose={() => setChatOpen(false)} />
 
       {/* ── Voice assistant (bottom-left) ── */}
       <VoiceControl
