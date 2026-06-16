@@ -67,3 +67,12 @@ SEED_BUSINESSES: Dict[str, List[SeedBusiness]] = {
 def get_seed_businesses(zip_code: str) -> List[SeedBusiness]:
     """Return a copy of the seed businesses for a zip, or an empty list."""
     return [dict(entry) for entry in SEED_BUSINESSES.get(zip_code, [])]
+
+
+def is_seed_business(business_id: str) -> bool:
+    """True if the id belongs to the bundled offline seed dataset."""
+    return any(
+        entry["id"] == business_id
+        for entries in SEED_BUSINESSES.values()
+        for entry in entries
+    )

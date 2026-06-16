@@ -21,7 +21,12 @@ from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 
 from db import get_db_connection, init_db
-from services import get_help_response, load_businesses, resolve_zip_location
+from services import (
+    business_exists,
+    get_help_response,
+    load_businesses,
+    resolve_zip_location,
+)
 from validation import is_valid_zip, validate_coupon, validate_review
 
 app = Flask(__name__)
@@ -98,6 +103,10 @@ def add_review():
 
     conn = get_db_connection()
     try:
+        if not business_exists(conn, cleaned["businessId"]):
+            return jsonify(
+                {"success": False, "error": "That business could not be found. Please reopen it and try again."}
+            ), 404
         conn.execute(
             "INSERT INTO reviews (business_id, user, rating, text, date) VALUES (?, ?, ?, ?, ?)",
             (
@@ -123,6 +132,10 @@ def add_coupon():
 
     conn = get_db_connection()
     try:
+        if not business_exists(conn, cleaned["businessId"]):
+            return jsonify(
+                {"success": False, "error": "That business could not be found. Please reopen it and try again."}
+            ), 404
         conn.execute(
             "INSERT INTO coupons (business_id, code, discount, date) VALUES (?, ?, ?, ?)",
             (

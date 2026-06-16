@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from typing import Optional, Tuple
 
-from seed_data import get_seed_businesses
+from seed_data import get_seed_businesses, is_seed_business
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -230,6 +230,20 @@ def load_businesses(conn: sqlite3.Connection, zip_code: str) -> Tuple[list, str]
         return _enrich_with_community_data(conn, seed), "seed"
 
     return [], "none"
+
+
+def business_exists(conn: sqlite3.Connection, business_id: str) -> bool:
+    """
+    Semantic check: does this id correspond to a known business — either a
+    cached OpenStreetMap result or a bundled seed entry? Reviews and coupons
+    for unknown ids are rejected so we never store orphan community data.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM businesses WHERE api_id = ? LIMIT 1", (business_id,)
+    ).fetchone()
+    if row is not None:
+        return True
+    return is_seed_business(business_id)
 
 
 def get_help_response(message: str) -> str:

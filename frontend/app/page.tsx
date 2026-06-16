@@ -18,6 +18,7 @@ import {
   fetchBusinesses,
   fetchCaptcha,
   fetchReviews,
+  getErrorMessage,
   submitCoupon,
   submitReview,
   verifyCaptcha,
@@ -49,6 +50,7 @@ export default function HomePage() {
   const [captchaAnswer, setCaptchaAnswer] = useState("")
   const [reviewForm, setReviewForm] = useState<ReviewForm>({ name: "", rating: 5, text: "" })
   const [couponForm, setCouponForm] = useState<CouponForm>({ code: "", discount: "" })
+  const [formError, setFormError] = useState("")
   const [chatOpen, setChatOpen] = useState(false)
   const [resultsOpen, setResultsOpen] = useState(false)
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
@@ -210,6 +212,7 @@ export default function HomePage() {
   const openBusiness = async (business: Business) => {
     setSelectedBusiness(business)
     setCaptchaAnswer("")
+    setFormError("")
     setReviewForm({ name: "", rating: 5, text: "" })
     setCouponForm({ code: "", discount: "" })
 
@@ -228,12 +231,16 @@ export default function HomePage() {
 
   const handleReviewSubmit = async () => {
     if (!selectedBusiness) return
-    if (!reviewForm.name.trim() || !reviewForm.text.trim()) return
+    if (!reviewForm.name.trim() || !reviewForm.text.trim()) {
+      setFormError("Please enter your name and a review before submitting.")
+      return
+    }
+    setFormError("")
 
     try {
       const captcha = await verifyCaptcha(captchaAnswer)
       if (!captcha.success) {
-        setCaptchaQuestion("Captcha incorrect. Try another.")
+        setFormError("That verification answer was incorrect — here's a new question to try.")
         const newCaptcha = await fetchCaptcha()
         setCaptchaQuestion(newCaptcha.question)
         setCaptchaAnswer("")
@@ -249,22 +256,27 @@ export default function HomePage() {
       const refreshed = await fetchReviews(selectedBusiness.id)
       setReviews(refreshed)
       setReviewForm({ name: "", rating: 5, text: "" })
+      setFormError("")
       const newCaptcha = await fetchCaptcha()
       setCaptchaQuestion(newCaptcha.question)
       setCaptchaAnswer("")
-    } catch {
-      setCaptchaQuestion("Unable to submit review. Try again.")
+    } catch (error) {
+      setFormError(getErrorMessage(error))
     }
   }
 
   const handleCouponSubmit = async () => {
     if (!selectedBusiness) return
-    if (!couponForm.code.trim() || !couponForm.discount.trim()) return
+    if (!couponForm.code.trim() || !couponForm.discount.trim()) {
+      setFormError("Please enter a coupon code and discount details before submitting.")
+      return
+    }
+    setFormError("")
 
     try {
       const captcha = await verifyCaptcha(captchaAnswer)
       if (!captcha.success) {
-        setCaptchaQuestion("Captcha incorrect. Try another.")
+        setFormError("That verification answer was incorrect — here's a new question to try.")
         const newCaptcha = await fetchCaptcha()
         setCaptchaQuestion(newCaptcha.question)
         setCaptchaAnswer("")
@@ -280,11 +292,12 @@ export default function HomePage() {
       setBusinesses(refreshed.businesses)
       setDataSource(refreshed.source)
       setCouponForm({ code: "", discount: "" })
+      setFormError("")
       const newCaptcha = await fetchCaptcha()
       setCaptchaQuestion(newCaptcha.question)
       setCaptchaAnswer("")
-    } catch {
-      setCaptchaQuestion("Unable to submit coupon. Try again.")
+    } catch (error) {
+      setFormError(getErrorMessage(error))
     }
   }
 
@@ -722,6 +735,7 @@ export default function HomePage() {
         couponForm={couponForm}
         captchaQuestion={captchaQuestion}
         captchaAnswer={captchaAnswer}
+        formError={formError}
         onReviewFormChange={setReviewForm}
         onCouponFormChange={setCouponForm}
         onCaptchaAnswerChange={setCaptchaAnswer}

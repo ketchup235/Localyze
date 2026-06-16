@@ -24,6 +24,13 @@ export interface CouponForm {
   discount: string
 }
 
+// Client-side length caps that mirror the backend validators (validation.py),
+// so the field stops accepting input before the server would reject it.
+const MAX_NAME_LEN = 80
+const MAX_TEXT_LEN = 1000
+const MAX_CODE_LEN = 40
+const MAX_DISCOUNT_LEN = 120
+
 interface BusinessDetailDialogProps {
   business: Business | null
   reviews: Review[]
@@ -31,6 +38,7 @@ interface BusinessDetailDialogProps {
   couponForm: CouponForm
   captchaQuestion: string
   captchaAnswer: string
+  formError?: string
   onReviewFormChange: (form: ReviewForm) => void
   onCouponFormChange: (form: CouponForm) => void
   onCaptchaAnswerChange: (value: string) => void
@@ -46,6 +54,7 @@ export function BusinessDetailDialog({
   couponForm,
   captchaQuestion,
   captchaAnswer,
+  formError,
   onReviewFormChange,
   onCouponFormChange,
   onCaptchaAnswerChange,
@@ -106,6 +115,7 @@ export function BusinessDetailDialog({
                 <Input
                   placeholder="Your name"
                   value={reviewForm.name}
+                  maxLength={MAX_NAME_LEN}
                   onChange={(event) => onReviewFormChange({ ...reviewForm, name: event.target.value })}
                 />
                 <div className="relative">
@@ -127,6 +137,7 @@ export function BusinessDetailDialog({
                 <Textarea
                   placeholder="Share your experience"
                   value={reviewForm.text}
+                  maxLength={MAX_TEXT_LEN}
                   onChange={(event) => onReviewFormChange({ ...reviewForm, text: event.target.value })}
                 />
               </div>
@@ -135,11 +146,13 @@ export function BusinessDetailDialog({
                 <Input
                   placeholder="Coupon code"
                   value={couponForm.code}
+                  maxLength={MAX_CODE_LEN}
                   onChange={(event) => onCouponFormChange({ ...couponForm, code: event.target.value })}
                 />
                 <Input
                   placeholder="Discount details"
                   value={couponForm.discount}
+                  maxLength={MAX_DISCOUNT_LEN}
                   onChange={(event) =>
                     onCouponFormChange({ ...couponForm, discount: event.target.value })
                   }
@@ -157,11 +170,18 @@ export function BusinessDetailDialog({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={onReviewSubmit}>Submit Review</Button>
-              <Button variant="outline" onClick={onCouponSubmit}>
-                Submit Coupon
-              </Button>
+            <div className="space-y-3">
+              {formError && (
+                <p className="text-sm text-rose-400" role="alert" aria-live="assertive">
+                  {formError}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={onReviewSubmit}>Submit Review</Button>
+                <Button variant="outline" onClick={onCouponSubmit}>
+                  Submit Coupon
+                </Button>
+              </div>
             </div>
           </div>
         )}

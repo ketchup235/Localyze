@@ -9,6 +9,20 @@ const API_BASE =
     ? ""
     : rawBase
 
+// Pull the server's human-readable validation message off a non-OK response so
+// the UI can show it verbatim, falling back to the status when there isn't one.
+async function extractErrorMessage(res: Response): Promise<string> {
+  try {
+    const data = (await res.json()) as { error?: unknown }
+    if (typeof data?.error === "string" && data.error.trim()) {
+      return data.error
+    }
+  } catch {
+    // Body wasn't JSON — fall through to the generic message.
+  }
+  return `Request failed: ${res.status}`
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -16,10 +30,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   })
 
   if (!res.ok) {
-    throw new Error(`Request failed: ${res.status}`)
+    throw new Error(await extractErrorMessage(res))
   }
 
   return (await res.json()) as T
+}
+
+// Narrow an unknown thrown value to a displayable message.
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message
+  }
+  return "Something went wrong. Please try again."
 }
 
 export async function fetchLocation(zip: string): Promise<LocationPayload> {
