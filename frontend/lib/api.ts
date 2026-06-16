@@ -18,7 +18,7 @@ async function extractErrorMessage(res: Response): Promise<string> {
       return data.error
     }
   } catch {
-    // Body wasn't JSON — fall through to the generic message.
+    // Body wasn't JSON - fall through to the generic message.
   }
   return `Request failed: ${res.status}`
 }

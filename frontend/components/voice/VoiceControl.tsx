@@ -94,7 +94,7 @@ function parseZip(text: string): string | null {
 }
 
 // Rank the browser's available voices and pick the most natural-sounding one.
-// The default system voice is usually a flat, robotic fallback — modern browsers
+// The default system voice is usually a flat, robotic fallback - modern browsers
 // ship far warmer neural voices, but you have to opt into them explicitly:
 //   • Edge:   "Microsoft Aria Online (Natural)" and friends
 //   • Chrome: "Google US English"
@@ -175,7 +175,7 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
     if (!SR || typeof window.speechSynthesis === "undefined") setSupported(false)
   }, [])
 
-  // Voices populate asynchronously in most browsers — load them now and refresh
+  // Voices populate asynchronously in most browsers - load them now and refresh
   // when the list changes, caching the most natural-sounding pick.
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.speechSynthesis === "undefined") return
@@ -271,7 +271,7 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
       let best = ""
       let settled = false
       // Safety cap so the mic can't hang open forever if the user never speaks.
-      // Not shown to the user — when they do speak, the silence cutoff below ends
+      // Not shown to the user - when they do speak, the silence cutoff below ends
       // the turn well before this.
       const MAX_MS = 12000
       // Once we have real transcript text, finish this many ms after the user
@@ -346,7 +346,7 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
       recognition.onerror = (event: any) => {
         const err = event?.error
         console.info("[VoiceControl] recognition.onerror:", err)
-        // Mic blocked: nothing we can do — surface it and stop.
+        // Mic blocked: nothing we can do - surface it and stop.
         if (err === "not-allowed" || err === "service-not-allowed") {
           setCaption("Microphone access is blocked. Enable it in your browser settings.")
           finish()
@@ -355,7 +355,7 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
         // A "network" / "language-not-supported" error here means this browser
         // can't reach a speech backend at all (common in Chromium browsers like
         // Arc/Brave that lack Google's speech API key).
-        // "no-speech" / "aborted" fire constantly before the user talks — ignore
+        // "no-speech" / "aborted" fire constantly before the user talks - ignore
         // and let onend restart us inside the window.
       }
       recognition.onend = () => {
@@ -365,7 +365,7 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
           finish()
           return
         }
-        // Otherwise the engine bailed early — keep the window open.
+        // Otherwise the engine bailed early - keep the window open.
         restart()
       }
 
@@ -450,7 +450,7 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
         await speak(command.phrase + " Anything else?")
       }
     } catch {
-      /* swallow — stopAll resets state */
+      /* swallow - stopAll resets state */
     } finally {
       stopAll()
     }

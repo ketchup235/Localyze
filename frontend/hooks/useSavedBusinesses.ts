@@ -9,8 +9,8 @@ export interface UseSavedBusinesses {
   toggleSaved: (business: Business) => void
 }
 
-// Persisted list of saved businesses, hydrated from and mirrored to
-// localStorage. Updates immutably so consumers re-render predictably.
+// Keeps the saved list in sync with localStorage: loads it once on mount,
+// then writes back whenever it changes.
 export function useSavedBusinesses(): UseSavedBusinesses {
   const [saved, setSaved] = useState<Business[]>([])
 

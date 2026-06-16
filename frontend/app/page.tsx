@@ -138,7 +138,7 @@ export default function HomePage() {
     return result
   }, [businesses, saved, category, searchText, sort])
 
-  // Fired by the globe as its dive nears the surface — crossfade to the map right
+  // Fired by the globe as its dive nears the surface - crossfade to the map right
   // away (no lingering at max zoom), then open the results panel.
   const handleDiveComplete = () => {
     setPhase("map")
@@ -165,14 +165,14 @@ export default function HomePage() {
 
     if (phase === "map") {
       // Re-search: crossfade to the globe (it's still at the same surface the map
-      // was, so they match — no cut), let it pull back out to the wide view, then
+      // was, so they match - no cut), let it pull back out to the wide view, then
       // roll + dive into the new zip. The crossfade BACK to the map is fired by
       // onDiveComplete, so the slower roll is never cut off by a fixed timer.
       setSelectedBusiness(null)
       setResultsOpen(false)
       setRollMsPerRad(280) // even faster re-search roll
       setPhase("globe")
-      setGlobeUnzoomKey((k) => k + 1) // globe pulls back out — inverse of the dive
+      setGlobeUnzoomKey((k) => k + 1) // globe pulls back out - inverse of the dive
       transitionTimers.current = [
         setTimeout(() => {
           if (immediate) setLocationFocus({ ...immediate }) // then roll + dive to new zip
@@ -240,7 +240,7 @@ export default function HomePage() {
     try {
       const captcha = await verifyCaptcha(captchaAnswer)
       if (!captcha.success) {
-        setFormError("That verification answer was incorrect — here's a new question to try.")
+        setFormError("That verification answer was incorrect - here's a new question to try.")
         const newCaptcha = await fetchCaptcha()
         setCaptchaQuestion(newCaptcha.question)
         setCaptchaAnswer("")
@@ -276,7 +276,7 @@ export default function HomePage() {
     try {
       const captcha = await verifyCaptcha(captchaAnswer)
       if (!captcha.success) {
-        setFormError("That verification answer was incorrect — here's a new question to try.")
+        setFormError("That verification answer was incorrect - here's a new question to try.")
         const newCaptcha = await fetchCaptcha()
         setCaptchaQuestion(newCaptcha.question)
         setCaptchaAnswer("")
@@ -320,14 +320,14 @@ export default function HomePage() {
   const isDesktop = viewport.width >= 768
   const desktopResultsOpen = resultsOpen && isDesktop
 
-  // Globe sizing — unchanged on-load / scroll behaviour. (The render cost is
+  // Globe sizing - unchanged on-load / scroll behaviour. (The render cost is
   // tamed inside GlobeHero by capping the drawing-buffer resolution, not by
   // changing this layout.)
   const heroDiameter = viewport.width ? viewport.width * 1.04 : 1040
   const globeScaleStart = 1.15
   const globeScaleEnd = 0.7
   const globeScaleBase = globeScaleStart - globeEaseSmooth * (globeScaleStart - globeScaleEnd)
-  // Once searching, the canvas sits at scale 1 so it always covers the screen —
+  // Once searching, the canvas sits at scale 1 so it always covers the screen -
   // the globe can never be trapped inside a smaller square (the "box" that was
   // clipping it). The camera does the zooming instead, pulling back to `globeWideZ`
   // (computed from the viewport so the whole sphere fits) and diving from there.
@@ -345,7 +345,11 @@ export default function HomePage() {
   const panelOpacity = desktopResultsOpen ? 1 : 0
 
   return (
-    <div id="top" className="relative h-screen overflow-hidden bg-background text-foreground">
+    <div
+      id="top"
+      tabIndex={-1}
+      className="relative h-screen overflow-hidden bg-background text-foreground focus:outline-none"
+    >
       {/* ── Map layer (revealed after the globe zooms in; pan by drag, no scroll) ── */}
       <div
         role="main"

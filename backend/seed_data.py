@@ -2,7 +2,7 @@
 Offline seed dataset.
 
 When the live OpenStreetMap lookup (Nominatim + Overpass) is unavailable or
-returns nothing — for example on unreliable conference Wi-Fi — the API falls
+returns nothing - for example on unreliable conference Wi-Fi - the API falls
 back to this curated list so the app always shows believable local businesses
 for the demo zip codes. This is the project's "backup plan" for the rubric's
 "must run standalone" requirement.

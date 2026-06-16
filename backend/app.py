@@ -5,7 +5,7 @@ A small Flask service that powers the Localyze frontend: it finds local
 businesses for a zip code, stores community reviews and coupons, guards
 submissions with a math CAPTCHA, and answers help-assistant questions.
 
-This module is intentionally thin — it only wires HTTP routes. The real work
+This module is intentionally thin - it only wires HTTP routes. The real work
 lives in focused modules:
     db.py          SQLite schema and connections
     services.py    geocoding, Overpass lookup, seed fallback, help matcher

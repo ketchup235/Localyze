@@ -234,7 +234,7 @@ def load_businesses(conn: sqlite3.Connection, zip_code: str) -> Tuple[list, str]
 
 def business_exists(conn: sqlite3.Connection, business_id: str) -> bool:
     """
-    Semantic check: does this id correspond to a known business — either a
+    Semantic check: does this id correspond to a known business - either a
     cached OpenStreetMap result or a bundled seed entry? Reviews and coupons
     for unknown ids are rejected so we never store orphan community data.
     """

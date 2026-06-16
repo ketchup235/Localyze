@@ -15,9 +15,8 @@ const sortRows = (saved: Business[], sort: string): Business[] =>
     return ratingOf(b) - ratingOf(a) // default + "rating" → best rated first
   })
 
-// Build a customizable, analyzable report of saved businesses: a summary with
-// headline metrics and a category breakdown, then a per-business table with
-// ratings, review counts, and deals. Pure — returns an HTML document string.
+// Builds the report HTML: a metrics summary, a category breakdown, and a
+// per-business table. No side effects, so it's easy to test.
 export function buildSavedBusinessesReportHtml(
   saved: Business[],
   sort: string,
@@ -66,7 +65,7 @@ export function buildSavedBusinessesReportHtml(
         <td>${
           b.deals && b.deals.length
             ? b.deals.map((d) => `${escapeHtml(d.code)} (${escapeHtml(d.discount)})`).join("<br/>")
-            : "—"
+            : "-"
         }</td>
         <td>${escapeHtml(b.address || currentZip)}</td>
       </tr>`,
@@ -90,7 +89,7 @@ export function buildSavedBusinessesReportHtml(
         </style>
       </head>
       <body>
-        <h1>Localyze — Saved Businesses Report</h1>
+        <h1>Localyze - Saved Businesses Report</h1>
         <div class="meta">
           Generated ${generatedAt}${currentZip ? ` · area ${escapeHtml(currentZip)}` : ""} · sorted by ${escapeHtml(sort)}
         </div>

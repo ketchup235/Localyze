@@ -35,7 +35,7 @@ const createCubicBezier = (p1x: number, p1y: number, p2x: number, p2y: number) =
   }
 }
 
-// Accelerating ease for the zoom-in — slow lift-off, hard rush at the end so it
+// Accelerating ease for the zoom-in - slow lift-off, hard rush at the end so it
 // blends straight into the map's fly-in.
 const zoomEase = createCubicBezier(0.5, 0, 0.75, 0.2)
 
@@ -258,7 +258,7 @@ export function GlobeHero({
         // Constant angular speed: duration is strictly proportional to the angle,
         // at `rollMsPerRad` ms per radian (the page passes a slower value for a
         // re-search). The floor scales WITH the speed so a slower setting always
-        // takes effect — a fixed floor would clamp small + slow rolls to the same
+        // takes effect - a fixed floor would clamp small + slow rolls to the same
         // duration as fast ones, silently ignoring the slow-down.
         const mpr = rollMsPerRadRef.current
         const rollDelta = Math.abs(focusFromRotationY - toY)
@@ -388,7 +388,7 @@ export function GlobeHero({
 
         if (isFocusing && focusFromCamera && focusToCamera) {
           if (focusStage === "rotate") {
-            // Phase 1 — spin the globe so the location tracks to dead centre.
+            // Phase 1 - spin the globe so the location tracks to dead centre.
             // Rotation is LINEAR (constant angular speed); the camera eases back
             // to the wide framing meanwhile.
             const progress = Math.min(1, (now - focusStartTime) / rotateDurationMs)
@@ -403,7 +403,7 @@ export function GlobeHero({
               zoomStartTime = now
             }
           } else {
-            // Phase 2 — dive in from the wide framing toward the centred location.
+            // Phase 2 - dive in from the wide framing toward the centred location.
             const progress = Math.min(1, (now - zoomStartTime) / zoomDurationMs)
             const eased = zoomEase(progress)
             targetRotationX = focusToRotationX

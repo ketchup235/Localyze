@@ -13,7 +13,7 @@ type MapViewProps = {
 
 // ── Offline map ────────────────────────────────────────────────────────────
 // Leaflet is bundled locally (npm) and its CSS is served from /public, and the
-// basemap is drawn procedurally on a canvas — so the whole map works with no
+// basemap is drawn procedurally on a canvas - so the whole map works with no
 // network. Tiles are a believable dark city grid (parks, water, roads), not real
 // geography (the brief said locations only need to look believable).
 
@@ -37,7 +37,7 @@ function drawTile(ctx: CanvasRenderingContext2D, tx: number, ty: number, S: numb
   const cols = Math.ceil(S / minor) + 1
   const rows = Math.ceil(S / minor) + 1
 
-  // City blocks — mostly buildings, with occasional parks and water.
+  // City blocks - mostly buildings, with occasional parks and water.
   for (let i = 0; i <= cols; i += 1) {
     for (let j = 0; j <= rows; j += 1) {
       const bx = startX + i
@@ -75,7 +75,7 @@ function drawTile(ctx: CanvasRenderingContext2D, tx: number, ty: number, S: numb
   }
   ctx.stroke()
 
-  // Major roads every 4 blocks — thicker and lighter.
+  // Major roads every 4 blocks - thicker and lighter.
   const major = minor * 4
   const sX = Math.floor(wx / major)
   const sY = Math.floor(wy / major)
@@ -210,7 +210,7 @@ export function MapView({
         })
         L.control.zoom({ position: "bottomright" }).addTo(map)
 
-        // Procedural offline basemap underneath (dark city grid, globe palette) —
+        // Procedural offline basemap underneath (dark city grid, globe palette) -
         // this is what shows when there's no network.
         createBasemapLayer(L).addTo(map)
 
@@ -231,7 +231,7 @@ export function MapView({
         setReady(true)
       })
       .catch(() => {
-        /* leaflet unavailable — container stays as a dark panel */
+        /* leaflet unavailable - container stays as a dark panel */
       })
 
     const handleResize = () => mapRef.current?.invalidateSize()
@@ -248,7 +248,7 @@ export function MapView({
   }, [])
 
   // ── Fly to the focused location (the seamless zoom-in). Runs once per focus
-  // change — deliberately NOT tied to panelOpen so the panel sliding in can't
+  // change - deliberately NOT tied to panelOpen so the panel sliding in can't
   // restart the zoom mid-flight. ──
   useEffect(() => {
     const map = mapRef.current
