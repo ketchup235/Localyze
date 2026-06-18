@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { GlobeHero } from "@/components/globe/GlobeHero"
 import { MapView } from "@/components/map/MapView"
-import { VoiceControl } from "@/components/voice/VoiceControl"
+import { VoiceControl, type VoiceSaveResult } from "@/components/voice/VoiceControl"
 import { BusinessCard } from "@/components/business/BusinessCard"
 import {
   BusinessDetailDialog,
@@ -28,6 +28,7 @@ import type { Business, LocationPayload, Review } from "@/lib/types"
 import { ZIP_LOCATIONS, getFallbackLocation } from "@/lib/locations"
 import { printSavedBusinessesReport } from "@/lib/report"
 import { useSavedBusinesses } from "@/hooks/useSavedBusinesses"
+import { matchBusinessName } from "@/lib/voiceSave"
 import { Download, MessageCircle, Search, ChevronDown } from "lucide-react"
 
 const categoryOptions = ["all", "food", "retail", "services", "saved"]
@@ -40,6 +41,10 @@ export default function HomePage() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [dataSource, setDataSource] = useState<BusinessSource>("none")
   const { saved, isSaved, toggleSaved } = useSavedBusinesses()
+  // Live mirrors of the result + saved lists. The async voice command loop closes
+  // over an earlier render, so it reads these refs to match against current data.
+  const businessesRef = useRef<Business[]>([])
+  const savedRef = useRef<Business[]>([])
   const [category, setCategory] = useState("all")
   const [searchText, setSearchText] = useState("")
   const [sort, setSort] = useState("default")
@@ -73,6 +78,14 @@ export default function HomePage() {
   useEffect(() => {
     resultsOpenRef.current = resultsOpen
   }, [resultsOpen])
+
+  useEffect(() => {
+    businessesRef.current = businesses
+  }, [businesses])
+
+  useEffect(() => {
+    savedRef.current = saved
+  }, [saved])
 
   useEffect(() => {
     return () => {
@@ -207,6 +220,19 @@ export default function HomePage() {
     if (!data) return null
     await new Promise((resolve) => setTimeout(resolve, 2600))
     return { count: data.length, zip }
+  }
+
+  // Voice: save the business whose name best matches the spoken phrase. Reads the
+  // live refs so it stays correct mid-conversation, after the voice loop has
+  // closed over an earlier render.
+  const handleVoiceSave = (spokenName: string): VoiceSaveResult => {
+    const match = matchBusinessName(spokenName, businessesRef.current)
+    if (!match) return { status: "notFound" }
+    if (savedRef.current.some((b) => b.id === match.id)) {
+      return { status: "already", name: match.name }
+    }
+    toggleSaved(match)
+    return { status: "saved", name: match.name }
   }
 
   const openBusiness = async (business: Business) => {
@@ -758,6 +784,7 @@ export default function HomePage() {
         onSearchZip={handleVoiceSearch}
         onSetCategory={setCategory}
         onSetSort={setSort}
+        onSaveBusiness={handleVoiceSave}
       />
     </div>
   )

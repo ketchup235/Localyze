@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Mic, Volume2, Loader2, X } from "lucide-react"
+import { parseSaveCommand } from "@/lib/voiceSave"
+
+// Outcome of a spoken "save <name>" command. `name` is the matched business's
+// real name (used in the spoken confirmation), present only when found.
+export type VoiceSaveResult =
+  | { status: "saved"; name: string }
+  | { status: "already"; name: string }
+  | { status: "notFound" }
 
 type VoiceControlProps = {
   // Runs the animated search for a zip; resolves with the result count once the
@@ -9,6 +17,9 @@ type VoiceControlProps = {
   onSearchZip: (zip: string) => Promise<{ count: number; zip: string } | null>
   onSetCategory: (category: string) => void
   onSetSort: (sort: string) => void
+  // Saves the business whose name best matches the spoken phrase. Optional: when
+  // omitted, voice covers search/filter/sort only.
+  onSaveBusiness?: (spokenName: string) => VoiceSaveResult
 }
 
 type Status = "idle" | "speaking" | "listening" | "working"
@@ -159,7 +170,7 @@ function interpretCommand(
   return { category, sort, phrase }
 }
 
-export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceControlProps) {
+export function VoiceControl({ onSearchZip, onSetCategory, onSetSort, onSaveBusiness }: VoiceControlProps) {
   const [supported, setSupported] = useState(true)
   const [status, setStatus] = useState<Status>("idle")
   const [caption, setCaption] = useState("")
@@ -425,9 +436,10 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
         return
       }
 
+      const saveHint = onSaveBusiness ? ", or save a business by name" : ""
       await speak(
         `I found ${result.count} ${result.count === 1 ? "business" : "businesses"} near ${zip}. ` +
-          "Would you like me to filter by a category? You can say, for example, filter by food, or sort by top rated.",
+          `Would you like me to filter by a category? You can say, for example, filter by food, sort by top rated${saveHint}.`,
       )
       if (!activeRef.current) return
 
@@ -440,9 +452,22 @@ export function VoiceControl({ onSearchZip, onSetCategory, onSetSort }: VoiceCon
           await speak("Okay.")
           break
         }
+        // "save <name>" takes priority over filter/sort so a business literally
+        // named "Food Co." isn't swallowed by the category matcher.
+        const saveTarget = onSaveBusiness ? parseSaveCommand(commandText) : null
+        if (saveTarget && onSaveBusiness) {
+          const outcome = onSaveBusiness(saveTarget)
+          if (outcome.status === "saved") await speak(`Saved ${outcome.name} to your list. Anything else?`)
+          else if (outcome.status === "already") await speak(`${outcome.name} is already in your saved list. Anything else?`)
+          else await speak(`I couldn't find a business called ${saveTarget} in your results. Try the name again.`)
+          continue
+        }
         const command = interpretCommand(commandText)
         if (!command) {
-          await speak("I didn't catch that. You can say things like filter by services, or sort by most reviewed.")
+          const help = onSaveBusiness
+            ? "I didn't catch that. You can say things like filter by services, sort by most reviewed, or save a business by name."
+            : "I didn't catch that. You can say things like filter by services, or sort by most reviewed."
+          await speak(help)
           continue
         }
         if (command.category) onSetCategory(command.category)
